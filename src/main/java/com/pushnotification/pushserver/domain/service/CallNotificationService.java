@@ -37,13 +37,13 @@ public class CallNotificationService {
         );
 
         // HARDCODED FCM TOKEN FOR TESTING - Replace with your actual FCM token
-        String testFcmToken = "cE6l4E_HShqqaRpo8Xo8ze:APA91bFgh6YHEsvlkrKg4-EXeMI8BvQ0VvGOA5ATzt_q65wENhIZ76LDGPbksBUu2cVbCh1pce7Aage0MiyqtQ8moBRvbTaK4rJwO34LMyPsLFsY4IrRTSs"; // Replace with your Android FCM token
+        String testFcmToken = "fCTcLQ0mRse2lpxwWVtsQz:APA91bFde8EuIvdM2Fegw-J_pUtdUOzRl6GxkiPdb2PY7eytHUmYfAKdDblfyPC4UK6Eszw2yZODtBQd6S7x-JqRtTS8I9Q7WYk8uQGOGKpgKiqv06mpjYA"; // Replace with your Android FCM token
         
         log.info("TEST MODE: Using hardcoded FCM token for testing");
         log.info("FCM Token: {}", testFcmToken.length() > 10 ? testFcmToken.substring(0, 10) + "..." : testFcmToken);
 
         // Send to hardcoded FCM token for testing
-        if (testFcmToken != null && !testFcmToken.equals("cE6l4E_HShqqaRpo8Xo8ze:APA91bFgh6YHEsvlkrKg4-EXeMI8BvQ0VvGOA5ATzt_q65wENhIZ76LDGPbksBUu2cVbCh1pce7Aage0MiyqtQ8moBRvbTaK4rJwO34LMyPsLFsY4IrRTSs") && !testFcmToken.trim().isEmpty()) {
+        if (testFcmToken != null && !testFcmToken.equals("fCTcLQ0mRse2lpxwWVtsQz:APA91bFde8EuIvdM2Fegw-J_pUtdUOzRl6GxkiPdb2PY7eytHUmYfAKdDblfyPC4UK6Eszw2yZODtBQd6S7x-JqRtTS8I9Q7WYk8uQGOGKpgKiqv06mpjYA") && !testFcmToken.trim().isEmpty()) {
             log.info("Sending FCM notification to hardcoded Android device");
             fcmPushService.send(testFcmToken, title, body, data).join();
         } else {
