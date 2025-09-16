@@ -30,35 +30,44 @@ public class CallNotificationService {
         String title = "Incoming " + request.getCallType() + " call";
         String body = request.getSenderId() + " is calling";
         Map<String, String> data = Map.of(
-                "type", "call",
-                "callType", request.getCallType(),
-                "roomId", request.getRoomId(),
-                "senderId", request.getSenderId()
-        );
+//                "event_id", request.getEventId(),
+                "room_id", request.getRoomId(),
+//                "unread", "1",
+//                "prio", "high",
+//                "cs", "call-secret",
+                "type", "call", "callType", request.getCallType(), "senderId", request.getSenderId());
 
-        // HARDCODED FCM TOKEN FOR TESTING - Replace with your actual FCM token
-        String testFcmToken = "dUUFamYVRtWy4UlchOqNzX:APA91bFVcPHvFLG4JHz74QTb7nmJT1hbrrfFWUbDEYtJPe5xNTy9HnGhmKE_8i_5wK_FHhMUZKWuNk7ILL8j-Tf0zphku5TSRet3_7ndk27xVBf9KCgYpc0"; // Replace with your Android FCM token
-        
-        log.info("TEST MODE: Using hardcoded FCM token for testing");
-        log.info("FCM Token: {}", testFcmToken.length() > 10 ? testFcmToken.substring(0, 10) + "..." : testFcmToken);
+        // // HARDCODED FCM TOKEN FOR TESTING - Replace with your actual FCM token
+        // String testFcmToken = "cbuGFrOpRdiZ8atbFBh1rI:APA91bFkd4WEd2laJp4XiTAcba5mVixHN_o7UGge90KXM7h09c92kDXko5Er3FkMRr_yNwLls7HCOOxH1QqXG9uvjPS9DbdVc7TRKP1EViyuY3TBkQAO4Hw"; // Replace with your Android FCM token
 
-        // Send to hardcoded FCM token for testing
-        if (testFcmToken != null && !testFcmToken.equals("dUUFamYVRtWy4UlchOqNzX:APA91bFVcPHvFLG4JHz74QTb7nmJT1hbrrfFWUbDEYtJPe5xNTy9HnGhmKE_8i_5wK_FHhMUZKWuNk7ILL8j-Tf0zphku5TSRet3_7ndk27xVBf9KCgYpc0") && !testFcmToken.trim().isEmpty()) {
-            log.info("Sending FCM notification to hardcoded Android device");
-            fcmPushService.send(testFcmToken, title, body, data).join();
-        } else {
-            log.warn("No FCM test token configured! Please replace YOUR_FCM_TOKEN_HERE with actual FCM token");
-        }
+        // log.info("TEST MODE: Using hardcoded FCM token for testing");
+        // log.info("FCM Token: {}", testFcmToken.length() > 10 ? testFcmToken.substring(0, 10) + "..." : testFcmToken);
 
-        /* ORIGINAL DATABASE LOGIC - COMMENTED OUT FOR TESTING
+        // // Send to hardcoded FCM token for testing
+        // if (testFcmToken != null && !testFcmToken.trim().isEmpty()) {
+        //     log.info("🚀 Sending FCM notification to hardcoded Android device");
+        //     log.info("📱 FCM Token (first 20 chars): {}", testFcmToken.substring(0, Math.min(20, testFcmToken.length())));
+        //     log.info("📝 Notification details - Title: '{}', Body: '{}', Data: {}", title, body, data);
+
+        //     FcmPushService.ProviderResult fcmResult = fcmPushService.send(testFcmToken, title, body, data).join();
+
+        //     // Log detailed FCM response
+        //     log.info("📊 FCM Response received - Success: {}, MessageId: {}, Error: {}", 
+        //         fcmResult.success(), fcmResult.messageId(), fcmResult.error());
+
+        //     if (fcmResult.success()) {
+        //         log.info("✅ FCM SUCCESS: MessageId={}", fcmResult.messageId());
+        //     } else {
+        //         log.error("❌ FCM FAILED: Error={}", fcmResult.error());
+        //     }
+        // } else {
+        //     log.warn("No FCM test token configured! Please replace the hardcoded token with actual FCM token");
+        // }
+
+
         log.info("Resolving members for roomId={}", request.getRoomId());
         String senderMxid = request.getSenderId();
-        List<String> roomMembers = membershipRepository.findByRoomIdAndMembership(request.getRoomId(), "join")
-                .stream()
-                .map(m -> m.getUserId())
-                .filter(u -> !u.equals(senderMxid))
-                .distinct()
-                .collect(Collectors.toList());
+        List<String> roomMembers = membershipRepository.findByRoomIdAndMembership(request.getRoomId(), "join").stream().map(m -> m.getUserId()).filter(u -> !u.equals(senderMxid)).distinct().collect(Collectors.toList());
         log.info("Room members to notify (excluding sender): {}", roomMembers);
 
         List<Pusher> pushers = List.of();
@@ -67,34 +76,41 @@ public class CallNotificationService {
             pushers = pusherRepository.findByUserNameIn(roomMembers);
             if (pushers.isEmpty()) {
                 // Fallback: try matching on localparts if pushers store localpart only
-                List<String> memberLocals = roomMembers.stream()
-                        .map(this::extractLocalpart)
-                        .filter(s -> s != null && !s.isBlank())
-                        .distinct()
-                        .collect(Collectors.toList());
+                List<String> memberLocals = roomMembers.stream().map(this::extractLocalpart).filter(s -> s != null && !s.isBlank()).distinct().collect(Collectors.toList());
                 if (!memberLocals.isEmpty()) {
                     pushers = pusherRepository.findByUserNameIn(memberLocals);
                 }
             }
         }
         log.info("Loaded pushers: count={} (members={}, triedLocalsFallback={})", pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
-        List<CompletableFuture<?>> futures = pushers.stream()
-                .filter(p -> !request.getSenderId().equals(p.getUserName()))
-                .map(p -> {
-                    String token = p.getPushkey();
-                    boolean ios = isIosPusher(p);
-                    log.info("Sending to user={}, appId={}, platform={}, tokenPrefix={}", p.getUserName(), p.getAppId(), ios ? "iOS" : "Android", token != null && token.length() > 6 ? token.substring(0,6) : token);
-                    if (ios) {
-                        return apnsPushService.send(token, title, body, data);
+        List<CompletableFuture<?>> futures = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).map(p -> {
+            String token = p.getPushkey();
+            boolean ios = isIosPusher(p);
+            String trimmed = token != null ? token.trim() : null;
+            boolean whitespaceTrimmed = token != null && !token.equals(trimmed);
+            log.info("Sending to user={}, appId={}, platform={}, tokenPrefix={}", p.getUserName(), p.getAppId(), ios ? "iOS" : "Android", token != null && token.length() > 6 ? token.substring(0, 6) : token);
+            log.info("Token diagnostics: rawLen={}, trimmedLen={}, whitespaceTrimmed={}, startsWithSpace={}, endsWithSpace={}", token == null ? 0 : token.length(), trimmed == null ? 0 : trimmed.length(), whitespaceTrimmed, token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(0)), token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(token.length() - 1)));
+            if (ios) {
+                return apnsPushService.send(token, title, body, data).thenAccept(result -> {
+                    if (result.success()) {
+                        log.info("✅ APNS SUCCESS for user={}: ApnsId={}", p.getUserName(), result.messageId());
                     } else {
-                        return fcmPushService.send(token, title, body, data);
+                        log.error("❌ APNS FAILED for user={}: Error={}", p.getUserName(), result.error());
                     }
-                })
-                .collect(Collectors.toList());
+                });
+            } else {
+                return fcmPushService.send(token, title, body, data).thenAccept(result -> {
+                    if (result.success()) {
+                        log.info("✅ FCM SUCCESS for user={}: MessageId={}", p.getUserName(), result.messageId());
+                    } else {
+                        log.error("❌ FCM FAILED for user={}: Error={}", p.getUserName(), result.error());
+                    }
+                });
+            }
+        }).collect(Collectors.toList());
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         log.info("Completed sends for roomId={} recipients={} futures={} ", request.getRoomId(), roomMembers.size(), futures.size());
-        */
     }
 
     private String extractLocalpart(String mxid) {

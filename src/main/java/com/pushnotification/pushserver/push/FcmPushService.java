@@ -34,16 +34,33 @@ public class FcmPushService {
                 .build();
         builder.setApnsConfig(apnsConfig);
 
-        String tokenPreview = deviceToken != null && deviceToken.length() > 8 ? deviceToken.substring(0, 8) + "…" : deviceToken;
+        String rawToken = deviceToken;
+        String trimmedToken = deviceToken != null ? deviceToken.trim() : null;
+        boolean whitespaceTrimmed = rawToken != null && !rawToken.equals(trimmedToken);
+        String tokenPreview = rawToken != null && rawToken.length() > 8 ? rawToken.substring(0, 8) + "…" : rawToken;
         log.info("FCM sending: token={}, title='{}', dataKeys={}", tokenPreview, title, (data != null ? data.keySet() : java.util.Set.of()));
+        if (data != null && !data.isEmpty()) {
+            log.info("FCM data payload: {}", data);
+        } else {
+            log.info("FCM data payload: {}", "{}");
+        }
+        log.info("FCM token diagnostics: rawLen={}, trimmedLen={}, whitespaceTrimmed={}, startsWithSpace={}, endsWithSpace={}",
+                rawToken == null ? 0 : rawToken.length(),
+                trimmedToken == null ? 0 : trimmedToken.length(),
+                whitespaceTrimmed,
+                rawToken != null && !rawToken.isEmpty() && Character.isWhitespace(rawToken.charAt(0)),
+                rawToken != null && !rawToken.isEmpty() && Character.isWhitespace(rawToken.charAt(rawToken.length()-1))
+        );
 
         return CompletableFuture.supplyAsync(() -> {
             try {
+                log.info("FCM attempting to send notification...");
                 String id = firebaseMessaging.send(builder.build());
-                log.info("FCM sent: messageId={}", id);
+                log.info("🎉 FCM SENT SUCCESSFULLY: messageId={}, token={}", id, tokenPreview);
                 return new ProviderResult(true, id, null);
             } catch (Exception ex) {
-                log.error("FCM send failed: {}", ex.getMessage());
+                log.error("💥 FCM SEND FAILED: token={}, error={}, details={}, stackTrace={}", 
+                    tokenPreview, ex.getMessage(), ex.getClass().getSimpleName(), ex.getStackTrace()[0]);
                 return new ProviderResult(false, null, ex.getMessage());
             }
         });

@@ -55,15 +55,15 @@ public class ApnsPushService {
             if (cause == null) {
                 if (response.isAccepted()) {
                     String apnsId = response.getApnsId() != null ? response.getApnsId().toString() : null;
-                    log.info("APNs accepted: apnsId={}", apnsId);
+                    log.info("APNs accepted: apnsId={}, token={}", apnsId, tokenPreview);
                     promise.complete(new ProviderResult(true, apnsId, null));
                 } else {
                     String reason = response.getRejectionReason() != null ? response.getRejectionReason().orElse(null) : null;
-                    log.warn("APNs rejected: reason={}", reason);
+                    log.warn("APNs rejected: token={}, reason={}", tokenPreview, reason);
                     promise.complete(new ProviderResult(false, null, reason));
                 }
             } else {
-                log.error("APNs send failed: {}", cause.getMessage());
+                log.error("APNs send failed: token={}, error={}, details={}", tokenPreview, cause.getMessage(), cause.getClass().getSimpleName());
                 promise.complete(new ProviderResult(false, null, cause.getMessage()));
             }
         });
