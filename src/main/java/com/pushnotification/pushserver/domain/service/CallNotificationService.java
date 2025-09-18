@@ -131,9 +131,9 @@ public class CallNotificationService {
         // Hard-map app IDs to platforms; fallback to token shape only if appId unknown
         String appId = pusher.getAppId();
         if (appId != null) {
-            if ("com.pareza.app.ios.prod".equals(appId)
-                    || "com.pareza.app.ios.dev".equals(appId)
-                    || appId.startsWith("com.pareza.app.ios.")) {
+            if ("com.pareza.pro.ios.prod".equals(appId)
+                    || "com.pareza.pro.ios.dev".equals(appId)
+                    || appId.startsWith("com.pareza.pro.ios.")) {
                 return true; // iOS
             }
             
