@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import java.util.Base64;
+
 
 @Service
 @RequiredArgsConstructor
@@ -85,6 +87,7 @@ public class CallNotificationService {
         log.info("Loaded pushers: count={} (members={}, triedLocalsFallback={})", pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
         List<CompletableFuture<?>> futures = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).map(p -> {
             String token = p.getPushkey();
+
             boolean ios = isIosPusher(p);
             System.out.println("the app id============>>>>>>>>>>>>>"+p.getAppId());
             System.out.println("the boolean is=============>>>>>>>>>>" + ios);
@@ -93,7 +96,8 @@ public class CallNotificationService {
             log.info("Sending to user={}, appId={}, platform={}, tokenPrefix={}", p.getUserName(), p.getAppId(), ios ? "iOS" : "Android", token != null && token.length() > 6 ? token.substring(0, 6) : token);
             log.info("Token diagnostics: rawLen={}, trimmedLen={}, whitespaceTrimmed={}, startsWithSpace={}, endsWithSpace={}", token == null ? 0 : token.length(), trimmed == null ? 0 : trimmed.length(), whitespaceTrimmed, token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(0)), token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(token.length() - 1)));
             if (ios) {
-                return apnsPushService.send(token, title, body, data).thenAccept(result -> {
+                String convertedToken = tokenConverter(token);
+                return apnsPushService.send(convertedToken, title, body, data).thenAccept(result -> {
                     if (result.success()) {
                         log.info("✅ APNS SUCCESS for user={}: ApnsId={}", p.getUserName(), result.messageId());
                     } else {
@@ -113,6 +117,30 @@ public class CallNotificationService {
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         log.info("Completed sends for roomId={} recipients={} futures={} ", request.getRoomId(), roomMembers.size(), futures.size());
+    }
+
+
+    public String tokenConverter(String base64Token) {
+        try {
+            // Decode Base64 token to raw bytes
+            byte[] tokenBytes = Base64.getDecoder().decode(base64Token);
+
+            // Convert to hex string for APNs
+            return bytesToHex(tokenBytes);
+
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid Base64 token: {}", base64Token);
+            return null; // or throw exception
+        }
+    }
+
+
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder result = new StringBuilder();
+        for (byte b : bytes) {
+            result.append(String.format("%02x", b));
+        }
+        return result.toString();
     }
 
     private String extractLocalpart(String mxid) {
