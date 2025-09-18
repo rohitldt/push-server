@@ -86,6 +86,8 @@ public class CallNotificationService {
         List<CompletableFuture<?>> futures = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).map(p -> {
             String token = p.getPushkey();
             boolean ios = isIosPusher(p);
+            System.out.println("the app id============>>>>>>>>>>>>>"+p.getAppId());
+            System.out.println("the boolean is=============>>>>>>>>>>" + ios);
             String trimmed = token != null ? token.trim() : null;
             boolean whitespaceTrimmed = token != null && !token.equals(trimmed);
             log.info("Sending to user={}, appId={}, platform={}, tokenPrefix={}", p.getUserName(), p.getAppId(), ios ? "iOS" : "Android", token != null && token.length() > 6 ? token.substring(0, 6) : token);
@@ -134,6 +136,7 @@ public class CallNotificationService {
                     || appId.startsWith("com.pareza.app.ios.")) {
                 return true; // iOS
             }
+            
             if ("com.pareza.pro".equals(appId)) {
                 return false; // Android
             }
