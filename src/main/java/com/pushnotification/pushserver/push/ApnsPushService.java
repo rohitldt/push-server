@@ -46,8 +46,23 @@ public class ApnsPushService {
             return failed;
         }
         String topic = (apnsTopic != null && !apnsTopic.isBlank()) ? apnsTopic : null;
-        String tokenPreview = deviceToken != null && deviceToken.length() > 8 ? deviceToken.substring(0, 8) + "…" : deviceToken;
+        String rawToken = deviceToken;
+        String trimmedToken = deviceToken != null ? deviceToken.trim() : null;
+        boolean whitespaceTrimmed = rawToken != null && !rawToken.equals(trimmedToken);
+        String tokenPreview = rawToken != null && rawToken.length() > 8 ? rawToken.substring(0, 8) + "…" : rawToken;
         log.info("APNs sending: token={}, topic={}, title='{}', dataKeys={}", tokenPreview, topic, title, (data != null ? data.keySet() : java.util.Set.of()));
+        if (data != null && !data.isEmpty()) {
+            log.info("APNs data payload: {}", data);
+        } else {
+            log.info("APNs data payload: {}", "{}");
+        }
+        log.info("APNs token diagnostics: rawLen={}, trimmedLen={}, whitespaceTrimmed={}, startsWithSpace={}, endsWithSpace={}",
+                rawToken == null ? 0 : rawToken.length(),
+                trimmedToken == null ? 0 : trimmedToken.length(),
+                whitespaceTrimmed,
+                rawToken != null && !rawToken.isEmpty() && Character.isWhitespace(rawToken.charAt(0)),
+                rawToken != null && !rawToken.isEmpty() && Character.isWhitespace(rawToken.charAt(rawToken.length()-1))
+        );
         SimpleApnsPushNotification notification = new SimpleApnsPushNotification(deviceToken, topic, payload);
 
         CompletableFuture<ProviderResult> promise = new CompletableFuture<>();
