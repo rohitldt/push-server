@@ -29,6 +29,17 @@ public class CallController {
         log.info("Processed incoming call for roomId={} from senderId={}", request.getRoomId(), request.getSenderId());
         return ResponseEntity.ok(Map.of("status", "sent"));
     }
+
+    @PostMapping("/reject")
+    public ResponseEntity<Map<String, Object>> reject(@Valid @RequestBody CallNotificationRequest request) {
+        log.info("Call rejected: senderId={}, roomId={}, callType={}", request.getSenderId(), request.getRoomId(), request.getCallType());
+        // Use the same sending logic as incoming
+        callNotificationService.sendIncomingCallNotification(request);
+        return ResponseEntity.ok(Map.of(
+                "status", "rejected",
+                "reject", request.getReject() == null ? null : request.getReject()
+        ));
+    }
 }
 
 

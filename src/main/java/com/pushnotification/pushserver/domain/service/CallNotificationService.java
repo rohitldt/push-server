@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.Base64;
@@ -31,41 +32,17 @@ public class CallNotificationService {
     public void sendIncomingCallNotification(CallNotificationRequest request) {
         String title = "Incoming " + request.getCallType() + " call";
         String body = request.getSenderId() + " is calling";
-        Map<String, String> data = Map.of(
+        Map<String, String> data = new HashMap<>(Map.of(
 //                "event_id", request.getEventId(),
                 "room_id", request.getRoomId(),
 //                "unread", "1",
 //                "prio", "high",
 //                "cs", "call-secret",
-                "type", "call", "callType", request.getCallType(), "senderId", request.getSenderId());
-
-        // // HARDCODED FCM TOKEN FOR TESTING - Replace with your actual FCM token
-        // String testFcmToken = "cbuGFrOpRdiZ8atbFBh1rI:APA91bFkd4WEd2laJp4XiTAcba5mVixHN_o7UGge90KXM7h09c92kDXko5Er3FkMRr_yNwLls7HCOOxH1QqXG9uvjPS9DbdVc7TRKP1EViyuY3TBkQAO4Hw"; // Replace with your Android FCM token
-
-        // log.info("TEST MODE: Using hardcoded FCM token for testing");
-        // log.info("FCM Token: {}", testFcmToken.length() > 10 ? testFcmToken.substring(0, 10) + "..." : testFcmToken);
-
-        // // Send to hardcoded FCM token for testing
-        // if (testFcmToken != null && !testFcmToken.trim().isEmpty()) {
-        //     log.info("🚀 Sending FCM notification to hardcoded Android device");
-        //     log.info("📱 FCM Token (first 20 chars): {}", testFcmToken.substring(0, Math.min(20, testFcmToken.length())));
-        //     log.info("📝 Notification details - Title: '{}', Body: '{}', Data: {}", title, body, data);
-
-        //     FcmPushService.ProviderResult fcmResult = fcmPushService.send(testFcmToken, title, body, data).join();
-
-        //     // Log detailed FCM response
-        //     log.info("📊 FCM Response received - Success: {}, MessageId: {}, Error: {}", 
-        //         fcmResult.success(), fcmResult.messageId(), fcmResult.error());
-
-        //     if (fcmResult.success()) {
-        //         log.info("✅ FCM SUCCESS: MessageId={}", fcmResult.messageId());
-        //     } else {
-        //         log.error("❌ FCM FAILED: Error={}", fcmResult.error());
-        //     }
-        // } else {
-        //     log.warn("No FCM test token configured! Please replace the hardcoded token with actual FCM token");
-        // }
-
+                "type", "call", "callType", request.getCallType(), "senderId", request.getSenderId()
+        ));
+        if (request.getReject() != null) {
+            data.put("reject", String.valueOf(request.getReject()));
+        }
 
         log.info("Resolving members for roomId={}", request.getRoomId());
         String senderMxid = request.getSenderId();
@@ -84,13 +61,15 @@ public class CallNotificationService {
                 }
             }
         }
+
         log.info("Loaded pushers: count={} (members={}, triedLocalsFallback={})", pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
         List<CompletableFuture<?>> futures = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).map(p -> {
             String token = p.getPushkey();
-
             boolean ios = isIosPusher(p);
-            System.out.println("the app id============>>>>>>>>>>>>>"+p.getAppId());
+
+            System.out.println("the app id============>>>>>>>>>>>>>" + p.getAppId());
             System.out.println("the boolean is=============>>>>>>>>>>" + ios);
+
             String trimmed = token != null ? token.trim() : null;
             boolean whitespaceTrimmed = token != null && !token.equals(trimmed);
             log.info("Sending to user={}, appId={}, platform={}, tokenPrefix={}", p.getUserName(), p.getAppId(), ios ? "iOS" : "Android", token != null && token.length() > 6 ? token.substring(0, 6) : token);
@@ -159,12 +138,10 @@ public class CallNotificationService {
         // Hard-map app IDs to platforms; fallback to token shape only if appId unknown
         String appId = pusher.getAppId();
         if (appId != null) {
-            if ("com.pareza.pro.ios.prod".equals(appId)
-                    || "com.pareza.pro.ios.dev".equals(appId)
-                    || appId.startsWith("com.pareza.pro.ios.")) {
+            if ("com.pareza.pro.ios.prod".equals(appId) || "com.pareza.pro.ios.dev".equals(appId) || appId.startsWith("com.pareza.pro.ios.")) {
                 return true; // iOS
             }
-            
+
             if ("com.pareza.pro".equals(appId)) {
                 return false; // Android
             }
