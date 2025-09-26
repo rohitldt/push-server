@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +25,8 @@ public class ApnsPushService {
 
     @Value("${apns.topic:}")
     private String apnsTopic;
+    @Value("${apns.voip-topic:}")
+    private String apnsVoipTopic;
 
     public CompletableFuture<ProviderResult> send(String deviceToken, String title, String body, Map<String, String> data) {
         String payload;
@@ -79,6 +82,57 @@ public class ApnsPushService {
                 }
             } else {
                 log.error("APNs send failed: token={}, error={}, details={}", tokenPreview, cause.getMessage(), cause.getClass().getSimpleName());
+                promise.complete(new ProviderResult(false, null, cause.getMessage()));
+            }
+        });
+        return promise;
+    }
+
+    public CompletableFuture<ProviderResult> sendVoip(String deviceTokenHex, Map<String, String> data) {
+        String payload;
+        try {
+            Map<String, Object> root = new HashMap<>();
+            Map<String, Object> aps = new HashMap<>();
+            aps.put("content-available", 1);
+            root.put("aps", aps);
+            if (data != null && !data.isEmpty()) {
+                root.putAll(data);
+            }
+            payload = objectMapper.writeValueAsString(root);
+        } catch (Exception e) {
+            CompletableFuture<ProviderResult> failed = new CompletableFuture<>();
+            failed.complete(new ProviderResult(false, null, "Failed to build APNs VoIP payload: " + e.getMessage()));
+            return failed;
+        }
+
+        String topic = (apnsVoipTopic != null && !apnsVoipTopic.isBlank()) ? apnsVoipTopic : null;
+        String tokenPreview = deviceTokenHex != null && deviceTokenHex.length() > 8 ? deviceTokenHex.substring(0, 8) + "…" : deviceTokenHex;
+        log.info("APNs VoIP sending: token={}, topic={}, dataKeys={}", tokenPreview, topic, (data != null ? data.keySet() : java.util.Set.of()));
+
+        // Build a notification with VOIP push type, immediate priority and short expiration
+        SimpleApnsPushNotification notification = SimpleApnsPushNotification.builder()
+                .setToken(deviceTokenHex)
+                .setTopic(topic)
+                .setPayload(payload)
+                .setPushType(com.eatthepath.pushy.apns.ApnsPushType.VOIP)
+                .setPriority(SimpleApnsPushNotification.DeliveryPriority.IMMEDIATE)
+                .setExpiration(Instant.now().plusSeconds(30))
+                .build();
+
+        CompletableFuture<ProviderResult> promise = new CompletableFuture<>();
+        apnsClient.sendNotification(notification).whenComplete((response, cause) -> {
+            if (cause == null) {
+                if (response.isAccepted()) {
+                    String apnsId = response.getApnsId() != null ? response.getApnsId().toString() : null;
+                    log.info("APNs VoIP accepted: apnsId={}, token={}", apnsId, tokenPreview);
+                    promise.complete(new ProviderResult(true, apnsId, null));
+                } else {
+                    String reason = response.getRejectionReason() != null ? response.getRejectionReason().orElse(null) : null;
+                    log.warn("APNs VoIP rejected: token={}, reason={}", tokenPreview, reason);
+                    promise.complete(new ProviderResult(false, null, reason));
+                }
+            } else {
+                log.error("APNs VoIP send failed: token={}, error={}, details={}", tokenPreview, cause.getMessage(), cause.getClass().getSimpleName());
                 promise.complete(new ProviderResult(false, null, cause.getMessage()));
             }
         });

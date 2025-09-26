@@ -75,12 +75,12 @@ public class CallNotificationService {
             log.info("Sending to user={}, appId={}, platform={}, tokenPrefix={}", p.getUserName(), p.getAppId(), ios ? "iOS" : "Android", token != null && token.length() > 6 ? token.substring(0, 6) : token);
             log.info("Token diagnostics: rawLen={}, trimmedLen={}, whitespaceTrimmed={}, startsWithSpace={}, endsWithSpace={}", token == null ? 0 : token.length(), trimmed == null ? 0 : trimmed.length(), whitespaceTrimmed, token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(0)), token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(token.length() - 1)));
             if (ios) {
-                String convertedToken = tokenConverter(token);
-                return apnsPushService.send(convertedToken, title, body, data).thenAccept(result -> {
+                String iosTokenHex = normalizeIosToken(token);
+                return apnsPushService.sendVoip(iosTokenHex, data).thenAccept(result -> {
                     if (result.success()) {
-                        log.info("✅ APNS SUCCESS for user={}: ApnsId={}", p.getUserName(), result.messageId());
+                        log.info("✅ APNS VoIP SUCCESS for user={}: ApnsId={}", p.getUserName(), result.messageId());
                     } else {
-                        log.error("❌ APNS FAILED for user={}: Error={}", p.getUserName(), result.error());
+                        log.error("❌ APNS VoIP FAILED for user={}: Error={}", p.getUserName(), result.error());
                     }
                 });
             } else {
@@ -120,6 +120,24 @@ public class CallNotificationService {
             result.append(String.format("%02x", b));
         }
         return result.toString();
+    }
+
+    private String normalizeIosToken(String rawToken) {
+        if (rawToken == null || rawToken.isBlank()) {
+            return rawToken;
+        }
+        String trimmed = rawToken.trim();
+        // If it's already hex (PushKit typical), return as-is
+        if (trimmed.matches("[a-fA-F0-9]{64}")) {
+            return trimmed;
+        }
+        // Otherwise attempt to treat it as base64 and convert to hex for APNs
+        try {
+            return tokenConverter(trimmed);
+        } catch (Exception e) {
+            log.warn("iOS token did not match hex or valid base64; using raw as-is");
+            return trimmed;
+        }
     }
 
     private String extractLocalpart(String mxid) {
