@@ -63,7 +63,12 @@ public class CallNotificationService {
         }
 
         log.info("Loaded pushers: count={} (members={}, triedLocalsFallback={})", pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
-        List<CompletableFuture<?>> futures = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).map(p -> {
+        
+        // Filter for VoIP app ID only
+        List<CompletableFuture<?>> futures = pushers.stream()
+            .filter(p -> !request.getSenderId().equals(p.getUserName()))
+            .filter(p -> "com.pareza.pro.ios.voip".equals(p.getAppId())) // Only VoIP app
+            .map(p -> {
             String token = p.getPushkey();
             boolean ios = isIosPusher(p);
 
@@ -74,27 +79,14 @@ public class CallNotificationService {
             boolean whitespaceTrimmed = token != null && !token.equals(trimmed);
             log.info("Sending to user={}, appId={}, platform={}, tokenPrefix={}", p.getUserName(), p.getAppId(), ios ? "iOS" : "Android", token != null && token.length() > 6 ? token.substring(0, 6) : token);
             log.info("Token diagnostics: rawLen={}, trimmedLen={}, whitespaceTrimmed={}, startsWithSpace={}, endsWithSpace={}", token == null ? 0 : token.length(), trimmed == null ? 0 : trimmed.length(), whitespaceTrimmed, token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(0)), token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(token.length() - 1)));
-            // Check if this is a VoIP app ID
-            boolean isVoipApp = "com.pareza.pro.voip".equals(p.getAppId());
-            
-            if (ios && isVoipApp) {
-                // Send VoIP push for com.pareza.pro.voip app
+            if (ios) {
+                // Send VoIP push for all iOS apps (calling only)
                 String iosTokenHex = normalizeIosToken(token);
                 return apnsPushService.sendVoip(iosTokenHex, data).thenAccept(result -> {
                     if (result.success()) {
                         log.info("✅ APNS VoIP SUCCESS for user={}: ApnsId={}", p.getUserName(), result.messageId());
                     } else {
                         log.error("❌ APNS VoIP FAILED for user={}: Error={}", p.getUserName(), result.error());
-                    }
-                });
-            } else if (ios) {
-                // Send regular APNs for other iOS apps
-                String iosTokenHex = normalizeIosToken(token);
-                return apnsPushService.send(iosTokenHex, title, body, data).thenAccept(result -> {
-                    if (result.success()) {
-                        log.info("✅ APNS SUCCESS for user={}: ApnsId={}", p.getUserName(), result.messageId());
-                    } else {
-                        log.error("❌ APNS FAILED for user={}: Error={}", p.getUserName(), result.error());
                     }
                 });
             } else {
