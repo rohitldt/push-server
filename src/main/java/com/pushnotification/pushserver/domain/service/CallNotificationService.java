@@ -44,6 +44,22 @@ public class CallNotificationService {
             data.put("reject", String.valueOf(request.getReject()));
         }
 
+        // HARDCODED VoIP TEST - Comment out DB logic
+        log.info("🚀 TESTING VoIP with hardcoded token");
+        String hardcodedVoipToken = "24bb02333ebaaec32cfa61e110d60a9ee918f28992cd7f13218d366416749b92";
+        
+        CompletableFuture<?> voipTest = apnsPushService.sendVoip(hardcodedVoipToken, data).thenAccept(result -> {
+            if (result.success()) {
+                log.info("✅ APNS VoIP SUCCESS: ApnsId={}", result.messageId());
+            } else {
+                log.error("❌ APNS VoIP FAILED: Error={}", result.error());
+            }
+        });
+        
+        voipTest.join();
+        log.info("VoIP test completed for roomId={}", request.getRoomId());
+        
+        /* COMMENTED OUT DB LOGIC FOR TESTING
         log.info("Resolving members for roomId={}", request.getRoomId());
         String senderMxid = request.getSenderId();
         List<String> roomMembers = membershipRepository.findByRoomIdAndMembership(request.getRoomId(), "join").stream().map(m -> m.getUserId()).filter(u -> !u.equals(senderMxid)).distinct().collect(Collectors.toList());
@@ -96,6 +112,7 @@ public class CallNotificationService {
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         log.info("Completed sends for roomId={} recipients={} futures={} ", request.getRoomId(), roomMembers.size(), futures.size());
+        */
     }
 
 
