@@ -9,6 +9,7 @@ public class CallNotificationRequest {
     private String roomId;
     private String callType; // e.g., audio or video
     private String eventId;
+    private String senderName;
     // Optional: for reject flow; forwarded when present
     private Boolean reject;
 }
