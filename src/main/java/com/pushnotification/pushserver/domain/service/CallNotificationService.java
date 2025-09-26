@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.Base64;
@@ -69,57 +70,76 @@ public class CallNotificationService {
         pushers.forEach(p -> log.info("  - user={}, appId={}, hasToken={}", 
             p.getUserName(), p.getAppId(), p.getPushkey() != null && !p.getPushkey().isBlank()));
         
-        // Filter for VoIP app ID only
+        // Filter for both VoIP (iOS) and FCM (Android) app IDs
         List<Pusher> voipPushers = pushers.stream()
             .filter(p -> !request.getSenderId().equals(p.getUserName()))
             .filter(p -> "com.pareza.pro.ios.voip".equals(p.getAppId()))
             .collect(Collectors.toList());
             
-        log.info("VoIP pushers after filtering: count={}", voipPushers.size());
+        List<Pusher> androidPushers = pushers.stream()
+            .filter(p -> !request.getSenderId().equals(p.getUserName()))
+            .filter(p -> "com.pareza.pro".equals(p.getAppId()))
+            .collect(Collectors.toList());
+            
+        log.info("VoIP pushers (iOS): count={}", voipPushers.size());
         voipPushers.forEach(p -> log.info("  - user={}, appId={}, token={}", 
             p.getUserName(), p.getAppId(), 
             p.getPushkey() != null ? p.getPushkey() : "NULL"));
+            
+        log.info("Android pushers: count={}", androidPushers.size());
+        androidPushers.forEach(p -> log.info("  - user={}, appId={}, token={}", 
+            p.getUserName(), p.getAppId(), 
+            p.getPushkey() != null ? p.getPushkey() : "NULL"));
         
-        if (voipPushers.isEmpty()) {
-            log.warn("⚠️ NO VoIP PUSHERS FOUND! Check if users have registered with appId=com.pareza.pro.ios.voip");
+        if (voipPushers.isEmpty() && androidPushers.isEmpty()) {
+            log.warn("⚠️ NO PUSHERS FOUND! Check if users have registered with appId=com.pareza.pro.ios.voip or com.pareza.pro");
         }
         
-        List<CompletableFuture<?>> futures = voipPushers.stream().map(p -> {
+        // Process VoIP pushers (iOS)
+        List<CompletableFuture<?>> voipFutures = voipPushers.stream().map(p -> {
             String token = p.getPushkey();
-            boolean ios = isIosPusher(p);
 
             System.out.println("the app id============>>>>>>>>>>>>>" + p.getAppId());
-            System.out.println("the boolean is=============>>>>>>>>>>" + ios);
 
             String trimmed = token != null ? token.trim() : null;
             boolean whitespaceTrimmed = token != null && !token.equals(trimmed);
-            log.info("Sending to user={}, appId={}, platform={}, tokenPrefix={}", p.getUserName(), p.getAppId(), ios ? "iOS" : "Android", token != null && token.length() > 6 ? token.substring(0, 6) : token);
+            log.info("Sending to user={}, appId={}, platform=iOS, token={}", p.getUserName(), p.getAppId(), token);
             log.info("Token diagnostics: rawLen={}, trimmedLen={}, whitespaceTrimmed={}, startsWithSpace={}, endsWithSpace={}", token == null ? 0 : token.length(), trimmed == null ? 0 : trimmed.length(), whitespaceTrimmed, token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(0)), token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(token.length() - 1)));
-            if (ios) {
-                // Send VoIP push for all iOS apps (calling only)
-                String iosTokenHex = normalizeIosToken(token);
-                return apnsPushService.sendVoip(iosTokenHex, data).thenAccept(result -> {
-                    if (result.success()) {
-                        log.info("✅ APNS VoIP SUCCESS for user={}: ApnsId={}", p.getUserName(), result.messageId());
-                    } else {
-                        log.error("❌ APNS VoIP FAILED for user={}: Error={}", p.getUserName(), result.error());
-                    }
-                });
-            } else {
-                // Send FCM for Android
-                return fcmPushService.send(token, title, body, data).thenAccept(result -> {
-                    if (result.success()) {
-                        log.info("✅ FCM SUCCESS for user={}: MessageId={}", p.getUserName(), result.messageId());
-                    } else {
-                        log.error("❌ FCM FAILED for user={}: Error={}", p.getUserName(), result.error());
-                    }
-                });
-            }
+            
+            // Since we filtered for com.pareza.pro.ios.voip, this is always iOS VoIP
+            String iosTokenHex = normalizeIosToken(token);
+            return apnsPushService.sendVoip(iosTokenHex, data).thenAccept(result -> {
+                if (result.success()) {
+                    log.info("✅ APNS VoIP SUCCESS for user={}: ApnsId={}", p.getUserName(), result.messageId());
+                } else {
+                    log.error("❌ APNS VoIP FAILED for user={}: Error={}", p.getUserName(), result.error());
+                }
+            });
         }).collect(Collectors.toList());
+        
+        // Process Android pushers (FCM)
+        List<CompletableFuture<?>> androidFutures = androidPushers.stream().map(p -> {
+            String token = p.getPushkey();
+            
+            log.info("Sending to user={}, appId={}, platform=Android, token={}", p.getUserName(), p.getAppId(), token);
+            
+            return fcmPushService.send(token, title, body, data).thenAccept(result -> {
+                if (result.success()) {
+                    log.info("✅ FCM SUCCESS for user={}: MessageId={}", p.getUserName(), result.messageId());
+                } else {
+                    log.error("❌ FCM FAILED for user={}: Error={}", p.getUserName(), result.error());
+                }
+            });
+        }).collect(Collectors.toList());
+        
+        // Combine all futures
+        List<CompletableFuture<?>> allFutures = new ArrayList<>();
+        allFutures.addAll(voipFutures);
+        allFutures.addAll(androidFutures);
 
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        log.info("Completed sends for roomId={} totalMembers={} voipPushers={} futures={}", 
-            request.getRoomId(), roomMembers.size(), voipPushers.size(), futures.size());
+        CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0])).join();
+        log.info("Completed sends for roomId={} totalMembers={} voipPushers={} androidPushers={} totalFutures={}", 
+            request.getRoomId(), roomMembers.size(), voipPushers.size(), androidPushers.size(), allFutures.size());
     }
 
 

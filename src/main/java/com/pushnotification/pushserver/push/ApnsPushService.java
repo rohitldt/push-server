@@ -108,8 +108,7 @@ public class ApnsPushService {
         }
 
         String topic = (apnsVoipTopic != null && !apnsVoipTopic.isBlank()) ? apnsVoipTopic : null;
-        String tokenPreview = deviceTokenHex != null && deviceTokenHex.length() > 8 ? deviceTokenHex.substring(0, 8) + "…" : deviceTokenHex;
-        log.info("APNs VoIP sending: token={}, topic={}, dataKeys={}", tokenPreview, topic, (data != null ? data.keySet() : java.util.Set.of()));
+        log.info("APNs VoIP sending: token={}, topic={}, dataKeys={}", deviceTokenHex, topic, (data != null ? data.keySet() : java.util.Set.of()));
 
         // Build a notification with VOIP push type, immediate priority and short expiration
         SimpleApnsPushNotification notification = new SimpleApnsPushNotification(
@@ -126,15 +125,15 @@ public class ApnsPushService {
             if (cause == null) {
                 if (response.isAccepted()) {
                     String apnsId = response.getApnsId() != null ? response.getApnsId().toString() : null;
-                    log.info("APNs VoIP accepted: apnsId={}, token={}", apnsId, tokenPreview);
+                    log.info("APNs VoIP accepted: apnsId={}, token={}", apnsId, deviceTokenHex);
                     promise.complete(new ProviderResult(true, apnsId, null));
                 } else {
                     String reason = response.getRejectionReason() != null ? response.getRejectionReason().orElse(null) : null;
-                    log.warn("APNs VoIP rejected: token={}, reason={}", tokenPreview, reason);
+                    log.warn("APNs VoIP rejected: token={}, reason={}", deviceTokenHex, reason);
                     promise.complete(new ProviderResult(false, null, reason));
                 }
             } else {
-                log.error("APNs VoIP send failed: token={}, error={}, details={}", tokenPreview, cause.getMessage(), cause.getClass().getSimpleName());
+                log.error("APNs VoIP send failed: token={}, error={}, details={}", deviceTokenHex, cause.getMessage(), cause.getClass().getSimpleName());
                 promise.complete(new ProviderResult(false, null, cause.getMessage()));
             }
         });
