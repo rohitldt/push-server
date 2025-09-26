@@ -35,7 +35,8 @@ public class CallNotificationService {
         String body = request.getSenderId() + " is calling";
         Map<String, String> data = new HashMap<>(Map.of(
 //                "event_id", request.getEventId(),
-                "roomId", request.getRoomId(),  // Changed from room_id to roomId
+                "roomId", request.getRoomId(),
+                "room_id", request.getRoomId(),
 //                "unread", "1",
 //                "prio", "high",
 //                "cs", "call-secret",
