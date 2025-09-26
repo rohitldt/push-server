@@ -43,6 +43,19 @@ public class CallNotificationService {
                 "type", "call", "callType", request.getCallType(), "senderId", request.getSenderId()
         ));
         log.info("VoIP data map to send (pre-APNs): {}", data);
+
+        // ===== TEMPORARY: Hardcoded iOS VoIP test path; skip DB/Android logic =====
+        String hardcodedVoipHexToken = "24bb02333ebaaec32cfa61e110d60a9ee918f28992cd7f13218d366416749b92";
+        log.warn("[TEST MODE] Sending VoIP to hardcoded iOS token only; DB/Android logic is skipped");
+        apnsPushService.sendVoip(hardcodedVoipHexToken, data).thenAccept(result -> {
+            if (result.success()) {
+                log.info("[TEST MODE] ✅ APNS VoIP SUCCESS: ApnsId={}", result.messageId());
+            } else {
+                log.error("[TEST MODE] ❌ APNS VoIP FAILED: Error={}", result.error());
+            }
+        }).join();
+        return;
+        // ===== END TEMPORARY TEST PATH =====
         if (request.getReject() != null) {
             data.put("reject", String.valueOf(request.getReject()));
         }
