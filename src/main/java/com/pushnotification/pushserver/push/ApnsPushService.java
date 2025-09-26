@@ -45,6 +45,8 @@ public class ApnsPushService {
                 root.putAll(data);
             }
             payload = objectMapper.writeValueAsString(root);
+            log.info("APNs JSON payload (regular): {}", payload);
+            System.out.println("[APNS-REGULAR] JSON payload: " + payload);
         } catch (Exception e) {
             CompletableFuture<ProviderResult> failed = new CompletableFuture<>();
             failed.complete(new ProviderResult(false, null, "Failed to build APNs payload: " + e.getMessage()));
@@ -102,6 +104,7 @@ public class ApnsPushService {
             }
             payload = objectMapper.writeValueAsString(root);
             log.info("APNs VoIP JSON payload: {}", payload);
+            System.out.println("[APNS-VOIP] JSON payload: " + payload);
         } catch (Exception e) {
             CompletableFuture<ProviderResult> failed = new CompletableFuture<>();
             failed.complete(new ProviderResult(false, null, "Failed to build APNs VoIP payload: " + e.getMessage()));

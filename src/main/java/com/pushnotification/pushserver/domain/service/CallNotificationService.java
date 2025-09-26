@@ -78,7 +78,13 @@ public class CallNotificationService {
         // Filter for both VoIP (iOS) and FCM (Android) app IDs
         List<Pusher> voipPushers = pushers.stream()
             .filter(p -> !request.getSenderId().equals(p.getUserName()))
-            .filter(p -> "com.pareza.pro.ios.voip".equals(p.getAppId()))
+            .filter(p -> {
+                String appId = p.getAppId();
+                return appId != null && (
+                        "com.pareza.pro.ios.prod.voip".equals(appId) ||
+                        "com.pareza.pro.ios.dev.voip".equals(appId)
+                );
+            })
             .collect(Collectors.toList());
             
         List<Pusher> androidPushers = pushers.stream()
