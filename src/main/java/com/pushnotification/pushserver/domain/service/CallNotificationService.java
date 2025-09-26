@@ -76,9 +76,9 @@ public class CallNotificationService {
             .collect(Collectors.toList());
             
         log.info("VoIP pushers after filtering: count={}", voipPushers.size());
-        voipPushers.forEach(p -> log.info("  - user={}, appId={}, tokenPrefix={}", 
+        voipPushers.forEach(p -> log.info("  - user={}, appId={}, token={}", 
             p.getUserName(), p.getAppId(), 
-            p.getPushkey() != null && p.getPushkey().length() > 8 ? p.getPushkey().substring(0, 8) + "..." : "NULL"));
+            p.getPushkey() != null ? p.getPushkey() : "NULL"));
         
         if (voipPushers.isEmpty()) {
             log.warn("⚠️ NO VoIP PUSHERS FOUND! Check if users have registered with appId=com.pareza.pro.ios.voip");
