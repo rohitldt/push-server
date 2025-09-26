@@ -41,7 +41,9 @@ public class CallNotificationService {
 //                "unread", "1",
 //                "prio", "high",
 //                "cs", "call-secret",
-                "type", "call", "callType", request.getCallType(), "senderId", request.getSenderId()
+                "type", "call",
+                "callType", request.getCallType(),
+                "senderId", request.getSenderId(),
                 "senderName", request.getSenderName()
         ));
         log.info("VoIP data map to send (pre-APNs): {}", data);
