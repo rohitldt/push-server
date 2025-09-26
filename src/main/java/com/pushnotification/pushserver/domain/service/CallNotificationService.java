@@ -64,11 +64,27 @@ public class CallNotificationService {
 
         log.info("Loaded pushers: count={} (members={}, triedLocalsFallback={})", pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
         
+        // Log all pushers before filtering
+        log.info("All pushers found:");
+        pushers.forEach(p -> log.info("  - user={}, appId={}, hasToken={}", 
+            p.getUserName(), p.getAppId(), p.getPushkey() != null && !p.getPushkey().isBlank()));
+        
         // Filter for VoIP app ID only
-        List<CompletableFuture<?>> futures = pushers.stream()
+        List<Pusher> voipPushers = pushers.stream()
             .filter(p -> !request.getSenderId().equals(p.getUserName()))
-            .filter(p -> "com.pareza.pro.ios.voip".equals(p.getAppId())) // Only VoIP app
-            .map(p -> {
+            .filter(p -> "com.pareza.pro.ios.voip".equals(p.getAppId()))
+            .collect(Collectors.toList());
+            
+        log.info("VoIP pushers after filtering: count={}", voipPushers.size());
+        voipPushers.forEach(p -> log.info("  - user={}, appId={}, tokenPrefix={}", 
+            p.getUserName(), p.getAppId(), 
+            p.getPushkey() != null && p.getPushkey().length() > 8 ? p.getPushkey().substring(0, 8) + "..." : "NULL"));
+        
+        if (voipPushers.isEmpty()) {
+            log.warn("⚠️ NO VoIP PUSHERS FOUND! Check if users have registered with appId=com.pareza.pro.ios.voip");
+        }
+        
+        List<CompletableFuture<?>> futures = voipPushers.stream().map(p -> {
             String token = p.getPushkey();
             boolean ios = isIosPusher(p);
 
@@ -102,7 +118,8 @@ public class CallNotificationService {
         }).collect(Collectors.toList());
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        log.info("Completed sends for roomId={} recipients={} futures={} ", request.getRoomId(), roomMembers.size(), futures.size());
+        log.info("Completed sends for roomId={} totalMembers={} voipPushers={} futures={}", 
+            request.getRoomId(), roomMembers.size(), voipPushers.size(), futures.size());
     }
 
 
