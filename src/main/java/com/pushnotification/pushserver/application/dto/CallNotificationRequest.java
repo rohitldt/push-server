@@ -10,6 +10,7 @@ public class CallNotificationRequest {
     private String callType; // e.g., audio or video
     private String eventId;
     private String senderName;
+    private String groupName; // Optional: for group calls
     // Optional: for reject flow; forwarded when present
     private Boolean reject;
 }

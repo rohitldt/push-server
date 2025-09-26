@@ -58,6 +58,10 @@ public class CallNotificationService {
             data.put("reject", String.valueOf(request.getReject()));
         }
 
+        if(request.getGroupName()!=null){
+            data.put("groupName", request.getGroupName());
+        }
+
         log.info("Resolving members for roomId={}", request.getRoomId());
         String senderMxid = request.getSenderId();
         List<String> roomMembers = membershipRepository.findByRoomIdAndMembership(request.getRoomId(), "join").stream().map(m -> m.getUserId()).filter(u -> !u.equals(senderMxid)).distinct().collect(Collectors.toList());
