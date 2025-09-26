@@ -34,18 +34,23 @@ public class CallNotificationService {
     public void sendIncomingCallNotification(CallNotificationRequest request) {
         String title = "Incoming " + request.getCallType() + " call";
         String body = request.getSenderId() + " is calling";
-        Map<String, String> data = new HashMap<>(Map.of(
-//                "event_id", request.getEventId(),
-                "roomId", request.getRoomId(),
-                "room_id", request.getRoomId(),
-//                "unread", "1",
-//                "prio", "high",
-//                "cs", "call-secret",
-                "type", "call",
-                "callType", request.getCallType(),
-                "senderId", request.getSenderId(),
-                "senderName", request.getSenderName()
-        ));
+        Map<String, String> data = new HashMap<>();
+        // Mandatory keys
+        if (request.getRoomId() != null) {
+            data.put("roomId", request.getRoomId());
+            data.put("room_id", request.getRoomId());
+        }
+        data.put("type", "call");
+        // Optional keys (avoid Map.of NPE on nulls)
+        if (request.getCallType() != null) {
+            data.put("callType", request.getCallType());
+        }
+        if (request.getSenderId() != null) {
+            data.put("senderId", request.getSenderId());
+        }
+        if (request.getSenderName() != null) {
+            data.put("senderName", request.getSenderName());
+        }
         log.info("VoIP data map to send (pre-APNs): {}", data);
 
         // Proceed with normal DB/Android/iOS logic below
