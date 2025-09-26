@@ -101,6 +101,7 @@ public class ApnsPushService {
                 root.putAll(data);
             }
             payload = objectMapper.writeValueAsString(root);
+            log.info("APNs VoIP JSON payload: {}", payload);
         } catch (Exception e) {
             CompletableFuture<ProviderResult> failed = new CompletableFuture<>();
             failed.complete(new ProviderResult(false, null, "Failed to build APNs VoIP payload: " + e.getMessage()));

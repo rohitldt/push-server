@@ -42,6 +42,7 @@ public class CallNotificationService {
 //                "cs", "call-secret",
                 "type", "call", "callType", request.getCallType(), "senderId", request.getSenderId()
         ));
+        log.info("VoIP data map to send (pre-APNs): {}", data);
         if (request.getReject() != null) {
             data.put("reject", String.valueOf(request.getReject()));
         }
