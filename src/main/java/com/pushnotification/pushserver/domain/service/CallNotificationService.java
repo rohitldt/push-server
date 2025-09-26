@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.List;
 import java.util.Map;
@@ -30,6 +31,9 @@ public class CallNotificationService {
     private final FcmPushService fcmPushService;
     private static final Logger log = LoggerFactory.getLogger(CallNotificationService.class);
 
+    @Value("${voip.test-mode:false}")
+    private boolean voipTestMode;
+
     public void sendIncomingCallNotification(CallNotificationRequest request) {
         String title = "Incoming " + request.getCallType() + " call";
         String body = request.getSenderId() + " is calling";
@@ -44,18 +48,19 @@ public class CallNotificationService {
         ));
         log.info("VoIP data map to send (pre-APNs): {}", data);
 
-        // ===== TEMPORARY: Hardcoded iOS VoIP test path; skip DB/Android logic =====
-        String hardcodedVoipHexToken = "24bb02333ebaaec32cfa61e110d60a9ee918f28992cd7f13218d366416749b92";
-        log.warn("[TEST MODE] Sending VoIP to hardcoded iOS token only; DB/Android logic is skipped");
-        apnsPushService.sendVoip(hardcodedVoipHexToken, data).thenAccept(result -> {
-            if (result.success()) {
-                log.info("[TEST MODE] ✅ APNS VoIP SUCCESS: ApnsId={}", result.messageId());
-            } else {
-                log.error("[TEST MODE] ❌ APNS VoIP FAILED: Error={}", result.error());
-            }
-        }).join();
-        return;
-        // ===== END TEMPORARY TEST PATH =====
+        // Optional TEST MODE: hardcode one iOS VoIP token and skip DB/Android logic
+        if (voipTestMode) {
+            String hardcodedVoipHexToken = "24bb02333ebaaec32cfa61e110d60a9ee918f28992cd7f13218d366416749b92";
+            log.warn("[TEST MODE] Sending VoIP to hardcoded iOS token only; DB/Android logic is skipped");
+            apnsPushService.sendVoip(hardcodedVoipHexToken, data).thenAccept(result -> {
+                if (result.success()) {
+                    log.info("[TEST MODE] ✅ APNS VoIP SUCCESS: ApnsId={}", result.messageId());
+                } else {
+                    log.error("[TEST MODE] ❌ APNS VoIP FAILED: Error={}", result.error());
+                }
+            }).join();
+            return;
+        }
         if (request.getReject() != null) {
             data.put("reject", String.valueOf(request.getReject()));
         }
