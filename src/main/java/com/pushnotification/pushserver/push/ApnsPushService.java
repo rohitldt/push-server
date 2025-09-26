@@ -3,6 +3,8 @@ package com.pushnotification.pushserver.push;
 import com.eatthepath.pushy.apns.ApnsClient;
 import com.eatthepath.pushy.apns.PushNotificationResponse;
 import com.eatthepath.pushy.apns.util.SimpleApnsPushNotification;
+import com.eatthepath.pushy.apns.PushType;
+import com.eatthepath.pushy.apns.DeliveryPriority;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -110,14 +112,14 @@ public class ApnsPushService {
         log.info("APNs VoIP sending: token={}, topic={}, dataKeys={}", tokenPreview, topic, (data != null ? data.keySet() : java.util.Set.of()));
 
         // Build a notification with VOIP push type, immediate priority and short expiration
-        SimpleApnsPushNotification notification = SimpleApnsPushNotification.builder()
-                .setToken(deviceTokenHex)
-                .setTopic(topic)
-                .setPayload(payload)
-                .setPushType(com.eatthepath.pushy.apns.ApnsPushType.VOIP)
-                .setPriority(SimpleApnsPushNotification.DeliveryPriority.IMMEDIATE)
-                .setExpiration(Instant.now().plusSeconds(30))
-                .build();
+        SimpleApnsPushNotification notification = new SimpleApnsPushNotification(
+                deviceTokenHex, 
+                topic, 
+                payload,
+                Instant.now().plusSeconds(30), // expiration
+                DeliveryPriority.IMMEDIATE, // priority
+                PushType.VOIP // push type
+        );
 
         CompletableFuture<ProviderResult> promise = new CompletableFuture<>();
         apnsClient.sendNotification(notification).whenComplete((response, cause) -> {
