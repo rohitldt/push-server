@@ -75,13 +75,21 @@ public class CallNotificationService {
         String notificationBody;
         
         if (isGroupCall) {
-            // It's a group call - get group name for display
+            // It's a group call - check if groupName is in request
             log.info("GROUP_CALL_PROCESSING - Processing group call notification [roomId={}, senderId={}]", 
                     request.getRoomId(), request.getSenderId());
             
-            // Get group name for notification display (from database)
-            groupName = getGroupName(request.getRoomId());
-            notificationTitle = "Incoming " + request.getCallType() + " call in " + (groupName != null ? groupName : "group");
+            // Use groupName from request if available, otherwise use "Group call"
+            if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
+                groupName = request.getGroupName();
+                notificationTitle = "Incoming " + request.getCallType() + " call in " + groupName;
+                log.info("GROUP_CALL_WITH_NAME - Group call with name from request [roomId={}, groupName={}]", 
+                        request.getRoomId(), groupName);
+            } else {
+                notificationTitle = "Incoming " + request.getCallType() + " call";
+                log.info("GROUP_CALL_WITHOUT_NAME - Group call without name, using generic title [roomId={}]", 
+                        request.getRoomId());
+            }
             notificationBody = request.getSenderId() + " is calling";
             
             log.info("GROUP_CALL_CONFIGURED - Group call notification configured [roomId={}, senderId={}, groupName={}, title={}]", 
