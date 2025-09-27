@@ -39,6 +39,11 @@ public class CallNotificationService {
         log.info("CALL_NOTIFICATION_START - Processing incoming call notification [roomId={}, senderId={}, callType={}]", 
                 request.getRoomId(), request.getSenderId(), request.getCallType());
         
+        // Log complete request details
+        log.info("REQUEST_DETAILS - Complete request data [roomId={}, senderId={}, callType={}, senderName={}, groupName={}, reject={}]", 
+                request.getRoomId(), request.getSenderId(), request.getCallType(), 
+                request.getSenderName(), request.getGroupName(), request.getReject());
+        
         // Check if the calling user (sender) is in a group room or direct message
         log.debug("ROOM_ANALYSIS_START - Analyzing room type for user [userId={}, roomId={}]", 
                 request.getSenderId(), request.getRoomId());
@@ -70,10 +75,11 @@ public class CallNotificationService {
         String notificationBody;
         
         if (isGroupCall) {
-            // It's a group call - get group name
+            // It's a group call - get group name for display
             log.info("GROUP_CALL_PROCESSING - Processing group call notification [roomId={}, senderId={}]", 
                     request.getRoomId(), request.getSenderId());
             
+            // Get group name for notification display (can be from database)
             groupName = getGroupName(request.getRoomId());
             notificationTitle = "Incoming " + request.getCallType() + " call in " + (groupName != null ? groupName : "group");
             notificationBody = request.getSenderId() + " is calling";
@@ -120,15 +126,15 @@ public class CallNotificationService {
         // Add group information if it's a group call
         if (isGroupCall) {
             data.put("isGroupCall", "true");
-            if (groupName != null) {
-                data.put("groupName", groupName);
+            // Always use groupName from request in payload
+            if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
+                data.put("groupName", request.getGroupName());
+                log.info("PAYLOAD_DATA_GROUP - Added group call data to payload [roomId={}, groupNameFromRequest={}]", 
+                        request.getRoomId(), request.getGroupName());
+            } else {
+                log.warn("PAYLOAD_DATA_GROUP_WARNING - Group call detected but no groupName in request [roomId={}, requestGroupName={}]", 
+                        request.getRoomId(), request.getGroupName());
             }
-            // Also add the group name from request if provided
-            if (request.getGroupName() != null) {
-            data.put("groupName", request.getGroupName());
-            }
-            log.debug("PAYLOAD_DATA_GROUP - Added group call data to payload [roomId={}, groupName={}]", 
-                    request.getRoomId(), groupName);
         } else {
             data.put("isGroupCall", "false");
             // For direct calls, add sender name to data payload
