@@ -79,7 +79,7 @@ public class CallNotificationService {
             log.info("GROUP_CALL_PROCESSING - Processing group call notification [roomId={}, senderId={}]", 
                     request.getRoomId(), request.getSenderId());
             
-            // Get group name for notification display (can be from database)
+            // Get group name for notification display (from database)
             groupName = getGroupName(request.getRoomId());
             notificationTitle = "Incoming " + request.getCallType() + " call in " + (groupName != null ? groupName : "group");
             notificationBody = request.getSenderId() + " is calling";
