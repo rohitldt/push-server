@@ -40,12 +40,11 @@ public class CallNotificationService {
                 request.getRoomId(), request.getSenderId(), request.getCallType());
         
         // Check if the calling user (sender) is in a group room or direct message
-        log.info("🔍 Analyzing room type for roomId={}", request.getRoomId());
-        String roomType = getUserRoomType(request.getRoomId());
-        boolean isGroupCall = "group_room".equals(roomType);
+        log.info("🔍 Analyzing if calling user {} is in a group room for roomId={}", request.getSenderId(), request.getRoomId());
+        boolean isGroupCall = isUserInGroupRoom(request.getSenderId(), request.getRoomId());
         
-        log.info("📊 Room analysis result: roomId={}, roomType={}, isGroupCall={}", 
-                request.getRoomId(), roomType, isGroupCall);
+        log.info("📊 User room analysis result: roomId={}, callingUser={}, isGroupCall={}", 
+                request.getRoomId(), request.getSenderId(), isGroupCall);
         
         String groupName = null;
         String notificationTitle;
@@ -111,7 +110,7 @@ public class CallNotificationService {
         
         log.info("📋 Final notification data payload: {}", data);
 
-        log.info("👥 Resolving members for roomId={}, roomType={}", request.getRoomId(), roomType);
+        log.info("👥 Resolving members for roomId={}, isGroupCall={}", request.getRoomId(), isGroupCall);
         String senderMxid = request.getSenderId();
         List<String> roomMembers = membershipRepository.findByRoomIdAndMembership(request.getRoomId(), "join").stream().map(m -> m.getUserId()).filter(u -> !u.equals(senderMxid)).distinct().collect(Collectors.toList());
         log.info("📝 Room members to notify (excluding sender): count={}, members={}", roomMembers.size(), roomMembers);
@@ -212,8 +211,8 @@ public class CallNotificationService {
         CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0])).join();
         log.info("✅ Completed notification sends for roomId={} totalMembers={} voipPushers={} androidPushers={} totalFutures={}", 
             request.getRoomId(), roomMembers.size(), voipPushers.size(), androidPushers.size(), allFutures.size());
-        log.info("🎯 Final notification summary: roomType={}, isGroupCall={}, title={}, body={}", 
-            roomType, isGroupCall, notificationTitle, notificationBody);
+        log.info("🎯 Final notification summary: roomId={}, callingUser={}, isGroupCall={}, title={}, body={}", 
+            request.getRoomId(), request.getSenderId(), isGroupCall, notificationTitle, notificationBody);
     }
 
 
@@ -371,6 +370,7 @@ public class CallNotificationService {
 
     /**
      * Gets the room type for a specific room (group_room, likely_dm, or direct_message)
+     * This checks if the calling user is in a group room or direct message
      * @param roomId The room ID to check
      * @return The room type string
      */
@@ -404,6 +404,50 @@ public class CallNotificationService {
         } catch (Exception e) {
             log.error("❌ Error analyzing room {}: {}, defaulting to likely_dm", roomId, e.getMessage(), e);
             return "likely_dm"; // Default to direct message if we can't determine
+        }
+    }
+
+    /**
+     * Checks if a specific user is in a group room based on your data structure
+     * This method uses the exact query you provided to determine room types
+     * @param userId The user ID to check
+     * @param roomId The room ID to check
+     * @return true if the user is in a group room, false if direct message
+     */
+    private boolean isUserInGroupRoom(String userId, String roomId) {
+        if (userId == null || userId.isBlank() || roomId == null || roomId.isBlank()) {
+            log.warn("⚠️ User ID or Room ID is null/blank, defaulting to direct message");
+            return false;
+        }
+
+        log.info("🔍 Checking if user {} is in group room for roomId={}", userId, roomId);
+        String sql = """
+            SELECT 
+                CASE 
+                    WHEN ad.content IS NOT NULL THEN 'direct_message'
+                    WHEN rsc.joined_members <= 2 THEN 'likely_dm'
+                    ELSE 'group_room'
+                END AS room_type
+            FROM rooms r
+            LEFT JOIN room_stats_current rsc ON r.room_id = rsc.room_id
+            LEFT JOIN account_data ad ON ad.user_id = ? 
+                AND ad.account_data_type = 'm.direct'
+                AND r.room_id = ANY (
+                    SELECT jsonb_array_elements_text(ad.content::jsonb)
+                )
+            WHERE r.room_id = ?
+            """;
+
+        try {
+            String roomType = jdbcTemplate.queryForObject(sql, String.class, userId, roomId);
+            boolean isGroup = "group_room".equals(roomType);
+            log.info("📊 User room type check: userId={}, roomId={}, roomType={}, isGroup={}", 
+                    userId, roomId, roomType, isGroup);
+            return isGroup;
+        } catch (Exception e) {
+            log.error("❌ Error checking user room type for user {} in room {}: {}, defaulting to direct message", 
+                    userId, roomId, e.getMessage(), e);
+            return false; // Default to direct message if we can't determine
         }
     }
 
