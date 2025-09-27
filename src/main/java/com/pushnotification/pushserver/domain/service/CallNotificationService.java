@@ -125,7 +125,7 @@ public class CallNotificationService {
             }
             // Also add the group name from request if provided
             if (request.getGroupName() != null) {
-                data.put("groupName", request.getGroupName());
+            data.put("groupName", request.getGroupName());
             }
             log.debug("PAYLOAD_DATA_GROUP - Added group call data to payload [roomId={}, groupName={}]", 
                     request.getRoomId(), groupName);
@@ -457,6 +457,7 @@ public class CallNotificationService {
         }
 
         log.debug("USER_ROOM_CHECK_START - Checking if user is in group room [userId={}, roomId={}]", userId, roomId);
+        // Query that handles both array and object structures in account_data.content
         String sql = """
             SELECT 
                 CASE 
@@ -468,8 +469,14 @@ public class CallNotificationService {
             LEFT JOIN room_stats_current rsc ON r.room_id = rsc.room_id
             LEFT JOIN account_data ad ON ad.user_id = ? 
                 AND ad.account_data_type = 'm.direct'
-                AND r.room_id = ANY (
-                    SELECT jsonb_array_elements_text(ad.content::jsonb)
+                AND (
+                    CASE 
+                        WHEN jsonb_typeof(ad.content) = 'array' THEN
+                            r.room_id = ANY (SELECT jsonb_array_elements_text(ad.content::jsonb))
+                        WHEN jsonb_typeof(ad.content) = 'object' THEN
+                            r.room_id = ANY (SELECT jsonb_array_elements_text(ad.content::jsonb->'rooms'))
+                        ELSE FALSE
+                    END
                 )
             WHERE r.room_id = ?
             """;
@@ -481,9 +488,32 @@ public class CallNotificationService {
                     userId, roomId, roomType, isGroup);
             return isGroup;
         } catch (Exception e) {
-            log.error("USER_ROOM_CHECK_ERROR - Failed to check user room type [userId={}, roomId={}, error={}]", 
-                    userId, roomId, e.getMessage(), e);
-            return false; // Default to direct message if we can't determine
+            log.warn("USER_ROOM_CHECK_ERROR - Primary query failed, trying fallback [userId={}, roomId={}, error={}]", 
+                    userId, roomId, e.getMessage());
+            
+            // Fallback query that only uses room_stats_current
+            try {
+                String fallbackSql = """
+                    SELECT 
+                        CASE 
+                            WHEN rsc.joined_members <= 2 THEN 'likely_dm'
+                            ELSE 'group_room'
+                        END AS room_type
+                    FROM rooms r
+                    LEFT JOIN room_stats_current rsc ON r.room_id = rsc.room_id
+                    WHERE r.room_id = ?
+                    """;
+                
+                String roomType = jdbcTemplate.queryForObject(fallbackSql, String.class, roomId);
+                boolean isGroup = "group_room".equals(roomType);
+                log.debug("USER_ROOM_CHECK_FALLBACK_RESULT - Fallback query completed [userId={}, roomId={}, roomType={}, isGroup={}]", 
+                        userId, roomId, roomType, isGroup);
+                return isGroup;
+            } catch (Exception fallbackError) {
+                log.error("USER_ROOM_CHECK_FALLBACK_ERROR - Both queries failed [userId={}, roomId={}, error={}]", 
+                        userId, roomId, fallbackError.getMessage(), fallbackError);
+                return false; // Default to direct message if we can't determine
+            }
         }
     }
 
@@ -494,28 +524,39 @@ public class CallNotificationService {
      */
     private String getGroupName(String roomId) {
         if (roomId == null || roomId.isBlank()) {
-            log.warn("⚠️ Room ID is null or blank for group name query");
+            log.warn("GROUP_NAME_INVALID - Room ID is null or blank for group name query [roomId={}]", roomId);
             return null;
         }
 
-        log.info("🏷️ Getting group name for roomId={}", roomId);
-        String sql = """
-            SELECT 
-                COALESCE(
-                    (SELECT content->>'name' FROM room_data WHERE room_id = ? AND type = 'm.room.name'),
-                    (SELECT content->>'topic' FROM room_data WHERE room_id = ? AND type = 'm.room.topic'),
-                    'Group Chat'
-                ) AS group_name
-            """;
+        log.debug("GROUP_NAME_QUERY_START - Getting group name for room [roomId={}]", roomId);
+        
+        // Try different possible table structures for group names
+        String[] queries = {
+            // Try room_data table with name
+            "SELECT content->>'name' FROM room_data WHERE room_id = ? AND type = 'm.room.name'",
+            // Try room_data table with topic
+            "SELECT content->>'topic' FROM room_data WHERE room_id = ? AND type = 'm.room.topic'",
+            // Try rooms table with name column
+            "SELECT name FROM rooms WHERE room_id = ?",
+            // Try rooms table with topic column
+            "SELECT topic FROM rooms WHERE room_id = ?"
+        };
 
-        try {
-            String groupName = jdbcTemplate.queryForObject(sql, String.class, roomId, roomId);
-            log.info("🏷️ Group name query result: roomId={}, groupName={}", roomId, groupName);
-            return groupName;
-        } catch (Exception e) {
-            log.error("❌ Error getting group name for room {}: {}, using default", roomId, e.getMessage(), e);
-            return "Group Chat"; // Default group name
+        for (String sql : queries) {
+            try {
+                String groupName = jdbcTemplate.queryForObject(sql, String.class, roomId);
+                if (groupName != null && !groupName.trim().isEmpty()) {
+                    log.debug("GROUP_NAME_QUERY_SUCCESS - Group name found [roomId={}, groupName={}]", roomId, groupName);
+                    return groupName;
+                }
+            } catch (Exception e) {
+                log.debug("GROUP_NAME_QUERY_ATTEMPT_FAILED - Query failed, trying next [roomId={}, error={}]", roomId, e.getMessage());
+                // Continue to next query
+            }
         }
+
+        log.warn("GROUP_NAME_QUERY_FALLBACK - No group name found, using default [roomId={}]", roomId);
+        return "Group Chat"; // Default group name
     }
 
     /**
@@ -525,28 +566,39 @@ public class CallNotificationService {
      */
     private String getSenderDisplayName(String senderId) {
         if (senderId == null || senderId.isBlank()) {
-            log.warn("⚠️ Sender ID is null or blank, using default");
+            log.warn("DISPLAY_NAME_INVALID - Sender ID is null or blank, using default [senderId={}]", senderId);
             return "Unknown User";
         }
 
-        log.info("👤 Getting display name for senderId={}", senderId);
-        String sql = """
-            SELECT 
-                COALESCE(
-                    (SELECT content->>'displayname' FROM profiles WHERE user_id = ?),
-                    (SELECT content->>'displayname' FROM user_directory WHERE user_id = ?),
-                    ?
-                ) AS display_name
-            """;
+        log.debug("DISPLAY_NAME_QUERY_START - Getting display name for sender [senderId={}]", senderId);
+        
+        // Try different possible table structures for display names
+        String[] queries = {
+            // Try profiles table with displayname column
+            "SELECT displayname FROM profiles WHERE user_id = ?",
+            // Try profiles table with content JSONB
+            "SELECT content->>'displayname' FROM profiles WHERE user_id = ?",
+            // Try user_directory table
+            "SELECT display_name FROM user_directory WHERE user_id = ?",
+            // Try user_directory with content JSONB
+            "SELECT content->>'displayname' FROM user_directory WHERE user_id = ?"
+        };
 
-        try {
-            String displayName = jdbcTemplate.queryForObject(sql, String.class, senderId, senderId, senderId);
-            log.info("👤 Display name query result: senderId={}, displayName={}", senderId, displayName);
-            return displayName != null ? displayName : senderId;
-        } catch (Exception e) {
-            log.error("❌ Error getting display name for sender {}: {}, using senderId", senderId, e.getMessage(), e);
-            return senderId; // Fallback to user ID
+        for (String sql : queries) {
+            try {
+                String displayName = jdbcTemplate.queryForObject(sql, String.class, senderId);
+                if (displayName != null && !displayName.trim().isEmpty()) {
+                    log.debug("DISPLAY_NAME_QUERY_SUCCESS - Display name found [senderId={}, displayName={}]", senderId, displayName);
+                    return displayName;
+                }
+            } catch (Exception e) {
+                log.debug("DISPLAY_NAME_QUERY_ATTEMPT_FAILED - Query failed, trying next [senderId={}, error={}]", senderId, e.getMessage());
+                // Continue to next query
+            }
         }
+
+        log.warn("DISPLAY_NAME_QUERY_FALLBACK - No display name found, using senderId [senderId={}]", senderId);
+        return senderId; // Fallback to original senderId
     }
 
     /**
