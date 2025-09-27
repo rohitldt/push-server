@@ -36,29 +36,33 @@ public class CallNotificationService {
 
 
     public void sendIncomingCallNotification(CallNotificationRequest request) {
-        log.info("🚀 Starting call notification process for roomId={}, senderId={}, callType={}", 
+        log.info("CALL_NOTIFICATION_START - Processing incoming call notification [roomId={}, senderId={}, callType={}]", 
                 request.getRoomId(), request.getSenderId(), request.getCallType());
         
         // Check if the calling user (sender) is in a group room or direct message
-        log.info("🔍 Analyzing if calling user {} is in a group room for roomId={}", request.getSenderId(), request.getRoomId());
+        log.debug("ROOM_ANALYSIS_START - Analyzing room type for user [userId={}, roomId={}]", 
+                request.getSenderId(), request.getRoomId());
         
         boolean isGroupCall = false;
         try {
             isGroupCall = isUserInGroupRoom(request.getSenderId(), request.getRoomId());
-            log.info("📊 User room analysis result: roomId={}, callingUser={}, isGroupCall={}", 
+            log.info("ROOM_ANALYSIS_RESULT - Room type determined [roomId={}, userId={}, isGroupCall={}]", 
                     request.getRoomId(), request.getSenderId(), isGroupCall);
         } catch (Exception e) {
-            log.error("❌ Error in group call detection: {}", e.getMessage(), e);
+            log.error("ROOM_ANALYSIS_ERROR - Failed to determine room type [roomId={}, userId={}, error={}]", 
+                    request.getRoomId(), request.getSenderId(), e.getMessage(), e);
             isGroupCall = false; // Default to direct call on error
-            log.info("📊 User room analysis result (error fallback): roomId={}, callingUser={}, isGroupCall={}", 
-                    request.getRoomId(), request.getSenderId(), isGroupCall);
+            log.warn("ROOM_ANALYSIS_FALLBACK - Using default direct call classification [roomId={}, userId={}]", 
+                    request.getRoomId(), request.getSenderId());
         }
         
-        // Clear decision log
+        // Log call type decision
         if (isGroupCall) {
-            log.info("🎯 DECISION: This is a GROUP CALL - will show group name in notification");
+            log.info("CALL_TYPE_DECISION - Group call detected, will display group name [roomId={}, userId={}]", 
+                    request.getRoomId(), request.getSenderId());
         } else {
-            log.info("🎯 DECISION: This is a DIRECT CALL - will show sender name in notification");
+            log.info("CALL_TYPE_DECISION - Direct call detected, will display sender name [roomId={}, userId={}]", 
+                    request.getRoomId(), request.getSenderId());
         }
         
         String groupName = null;
@@ -67,36 +71,26 @@ public class CallNotificationService {
         
         if (isGroupCall) {
             // It's a group call - get group name
-            log.info("👥 ===== GROUP CALL DETECTED =====");
-            log.info("👥 Calling user {} is in a GROUP ROOM", request.getSenderId());
-            log.info("👥 Room ID: {}", request.getRoomId());
-            log.info("👥 Getting group name for roomId={}", request.getRoomId());
+            log.info("GROUP_CALL_PROCESSING - Processing group call notification [roomId={}, senderId={}]", 
+                    request.getRoomId(), request.getSenderId());
+            
             groupName = getGroupName(request.getRoomId());
             notificationTitle = "Incoming " + request.getCallType() + " call in " + (groupName != null ? groupName : "group");
             notificationBody = request.getSenderId() + " is calling";
-            log.info("✅ Group call setup complete:");
-            log.info("   📍 Room: {}", request.getRoomId());
-            log.info("   👤 Sender: {}", request.getSenderId());
-            log.info("   🏷️ Group Name: {}", groupName);
-            log.info("   📱 Title: {}", notificationTitle);
-            log.info("   💬 Body: {}", notificationBody);
-            log.info("👥 ===== END GROUP CALL =====");
+            
+            log.info("GROUP_CALL_CONFIGURED - Group call notification configured [roomId={}, senderId={}, groupName={}, title={}]", 
+                    request.getRoomId(), request.getSenderId(), groupName, notificationTitle);
         } else {
             // It's a direct message - use sender name
-            log.info("💬 ===== DIRECT CALL DETECTED =====");
-            log.info("💬 Calling user {} is in a DIRECT MESSAGE", request.getSenderId());
-            log.info("💬 Room ID: {}", request.getRoomId());
-            log.info("💬 Getting sender display name for senderId={}", request.getSenderId());
+            log.info("DIRECT_CALL_PROCESSING - Processing direct call notification [roomId={}, senderId={}]", 
+                    request.getRoomId(), request.getSenderId());
+            
             String senderName = getSenderDisplayName(request.getSenderId());
             notificationTitle = "Incoming " + request.getCallType() + " call";
             notificationBody = senderName + " is calling";
-            log.info("✅ Direct call setup complete:");
-            log.info("   📍 Room: {}", request.getRoomId());
-            log.info("   👤 Sender: {}", request.getSenderId());
-            log.info("   👤 Sender Name: {}", senderName);
-            log.info("   📱 Title: {}", notificationTitle);
-            log.info("   💬 Body: {}", notificationBody);
-            log.info("💬 ===== END DIRECT CALL =====");
+            
+            log.info("DIRECT_CALL_CONFIGURED - Direct call notification configured [roomId={}, senderId={}, senderName={}, title={}]", 
+                    request.getRoomId(), request.getSenderId(), senderName, notificationTitle);
         }
 
         Map<String, String> data = new HashMap<>();
@@ -131,23 +125,28 @@ public class CallNotificationService {
             }
             // Also add the group name from request if provided
             if (request.getGroupName() != null) {
-            data.put("groupName", request.getGroupName());
+                data.put("groupName", request.getGroupName());
             }
-            log.info("📦 Added group call data: isGroupCall=true, groupName={}", groupName);
+            log.debug("PAYLOAD_DATA_GROUP - Added group call data to payload [roomId={}, groupName={}]", 
+                    request.getRoomId(), groupName);
         } else {
             data.put("isGroupCall", "false");
             // For direct calls, add sender name to data payload
             String senderName = getSenderDisplayName(request.getSenderId());
             data.put("senderName", senderName);
-            log.info("📦 Added direct call data: isGroupCall=false, senderName={}", senderName);
+            log.debug("PAYLOAD_DATA_DIRECT - Added direct call data to payload [roomId={}, senderName={}]", 
+                    request.getRoomId(), senderName);
         }
+        
+        log.debug("NOTIFICATION_PAYLOAD - Final data payload prepared [roomId={}, payloadSize={}, keys={}]", 
+                request.getRoomId(), data.size(), data.keySet());
 
-        log.info("📋 Final notification data payload: {}", data);
-
-        log.info("👥 Resolving members for roomId={}, isGroupCall={}", request.getRoomId(), isGroupCall);
+        log.info("MEMBER_RESOLUTION_START - Resolving room members for notification [roomId={}, isGroupCall={}]", 
+                request.getRoomId(), isGroupCall);
         String senderMxid = request.getSenderId();
         List<String> roomMembers = membershipRepository.findByRoomIdAndMembership(request.getRoomId(), "join").stream().map(m -> m.getUserId()).filter(u -> !u.equals(senderMxid)).distinct().collect(Collectors.toList());
-        log.info("📝 Room members to notify (excluding sender): count={}, members={}", roomMembers.size(), roomMembers);
+        log.info("MEMBER_RESOLUTION_RESULT - Room members identified [roomId={}, memberCount={}, members={}]", 
+                request.getRoomId(), roomMembers.size(), roomMembers);
 
         List<Pusher> pushers = List.of();
         if (!roomMembers.isEmpty()) {
@@ -162,11 +161,12 @@ public class CallNotificationService {
             }
         }
 
-        log.info("📱 Loaded pushers: count={} (members={}, triedLocalsFallback={})", pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
+        log.info("PUSHER_LOAD_RESULT - Pushers loaded from database [totalPushers={}, roomMembers={}, fallbackUsed={}]", 
+                pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
         
         // Log all pushers before filtering
-        log.info("📱 All pushers found:");
-        pushers.forEach(p -> log.info("  - user={}, appId={}, hasToken={}", 
+        log.debug("PUSHER_DETAILS - All pushers found in database:");
+        pushers.forEach(p -> log.debug("PUSHER_ITEM - Pusher details [user={}, appId={}, hasToken={}]", 
             p.getUserName(), p.getAppId(), p.getPushkey() != null && !p.getPushkey().isBlank()));
         
         // Filter for both VoIP (iOS) and FCM (Android) app IDs
@@ -186,18 +186,19 @@ public class CallNotificationService {
             .filter(p -> "com.pareza.pro".equals(p.getAppId()))
             .collect(Collectors.toList());
             
-        log.info("🍎 VoIP pushers (iOS): count={}", voipPushers.size());
-        voipPushers.forEach(p -> log.info("  - user={}, appId={}, token={}", 
+        log.info("PUSHER_FILTER_IOS - iOS VoIP pushers identified [count={}]", voipPushers.size());
+        voipPushers.forEach(p -> log.debug("PUSHER_IOS - iOS pusher details [user={}, appId={}, tokenLength={}]", 
             p.getUserName(), p.getAppId(), 
-            p.getPushkey() != null ? p.getPushkey() : "NULL"));
+            p.getPushkey() != null ? p.getPushkey().length() : 0));
             
-        log.info("🤖 Android pushers: count={}", androidPushers.size());
-        androidPushers.forEach(p -> log.info("  - user={}, appId={}, token={}", 
+        log.info("PUSHER_FILTER_ANDROID - Android FCM pushers identified [count={}]", androidPushers.size());
+        androidPushers.forEach(p -> log.debug("PUSHER_ANDROID - Android pusher details [user={}, appId={}, tokenLength={}]", 
             p.getUserName(), p.getAppId(), 
-            p.getPushkey() != null ? p.getPushkey() : "NULL"));
+            p.getPushkey() != null ? p.getPushkey().length() : 0));
         
         if (voipPushers.isEmpty() && androidPushers.isEmpty()) {
-            log.warn("⚠️ NO PUSHERS FOUND! Check if users have registered with appId=com.pareza.pro.ios.voip or com.pareza.pro");
+            log.warn("PUSHER_WARNING - No valid pushers found for notification [roomId={}, memberCount={}] - Check user registrations", 
+                    request.getRoomId(), roomMembers.size());
         }
         
         // Process VoIP pushers (iOS)
@@ -243,9 +244,9 @@ public class CallNotificationService {
         allFutures.addAll(androidFutures);
 
         CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0])).join();
-        log.info("✅ Completed notification sends for roomId={} totalMembers={} voipPushers={} androidPushers={} totalFutures={}", 
+        log.info("NOTIFICATION_SEND_COMPLETE - All notifications sent successfully [roomId={}, totalMembers={}, voipPushers={}, androidPushers={}, totalFutures={}]", 
             request.getRoomId(), roomMembers.size(), voipPushers.size(), androidPushers.size(), allFutures.size());
-        log.info("🎯 Final notification summary: roomId={}, callingUser={}, isGroupCall={}, title={}, body={}", 
+        log.info("CALL_NOTIFICATION_SUMMARY - Final notification summary [roomId={}, callingUser={}, isGroupCall={}, title={}, body={}]", 
             request.getRoomId(), request.getSenderId(), isGroupCall, notificationTitle, notificationBody);
     }
 
@@ -410,11 +411,11 @@ public class CallNotificationService {
      */
     private String getUserRoomType(String roomId) {
         if (roomId == null || roomId.isBlank()) {
-            log.warn("⚠️ Room ID is null or blank, defaulting to likely_dm");
+            log.warn("ROOM_ANALYSIS_INVALID - Room ID is null or blank, defaulting to likely_dm [roomId={}]", roomId);
             return "likely_dm";
         }
 
-        log.info("🔍 Executing room type query for roomId={}", roomId);
+        log.debug("ROOM_TYPE_QUERY_START - Executing room type analysis query [roomId={}]", roomId);
         String sql = """
             SELECT 
                 CASE 
@@ -433,10 +434,10 @@ public class CallNotificationService {
 
         try {
             String roomType = jdbcTemplate.queryForObject(sql, String.class, roomId);
-            log.info("📊 Room type query result: roomId={}, roomType={}", roomId, roomType);
+            log.debug("ROOM_TYPE_QUERY_RESULT - Room type analysis completed [roomId={}, roomType={}]", roomId, roomType);
             return roomType != null ? roomType : "likely_dm";
         } catch (Exception e) {
-            log.error("❌ Error analyzing room {}: {}, defaulting to likely_dm", roomId, e.getMessage(), e);
+            log.error("ROOM_TYPE_QUERY_ERROR - Failed to analyze room type [roomId={}, error={}]", roomId, e.getMessage(), e);
             return "likely_dm"; // Default to direct message if we can't determine
         }
     }
@@ -450,11 +451,12 @@ public class CallNotificationService {
      */
     private boolean isUserInGroupRoom(String userId, String roomId) {
         if (userId == null || userId.isBlank() || roomId == null || roomId.isBlank()) {
-            log.warn("⚠️ User ID or Room ID is null/blank, defaulting to direct message");
+            log.warn("USER_ROOM_CHECK_INVALID - User ID or Room ID is null/blank, defaulting to direct message [userId={}, roomId={}]", 
+                    userId, roomId);
             return false;
         }
 
-        log.info("🔍 Checking if user {} is in group room for roomId={}", userId, roomId);
+        log.debug("USER_ROOM_CHECK_START - Checking if user is in group room [userId={}, roomId={}]", userId, roomId);
         String sql = """
             SELECT 
                 CASE 
@@ -475,11 +477,11 @@ public class CallNotificationService {
         try {
             String roomType = jdbcTemplate.queryForObject(sql, String.class, userId, roomId);
             boolean isGroup = "group_room".equals(roomType);
-            log.info("📊 User room type check: userId={}, roomId={}, roomType={}, isGroup={}", 
+            log.debug("USER_ROOM_CHECK_RESULT - User room type analysis completed [userId={}, roomId={}, roomType={}, isGroup={}]", 
                     userId, roomId, roomType, isGroup);
             return isGroup;
         } catch (Exception e) {
-            log.error("❌ Error checking user room type for user {} in room {}: {}, defaulting to direct message", 
+            log.error("USER_ROOM_CHECK_ERROR - Failed to check user room type [userId={}, roomId={}, error={}]", 
                     userId, roomId, e.getMessage(), e);
             return false; // Default to direct message if we can't determine
         }
