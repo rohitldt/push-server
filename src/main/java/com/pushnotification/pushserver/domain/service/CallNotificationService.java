@@ -34,6 +34,7 @@ public class CallNotificationService {
     public void sendIncomingCallNotification(CallNotificationRequest request) {
         String title = "Incoming " + request.getCallType() + " call";
         String body = request.getSenderId() + " is calling";
+
         Map<String, String> data = new HashMap<>();
         // Mandatory keys
         if (request.getRoomId() != null) {
