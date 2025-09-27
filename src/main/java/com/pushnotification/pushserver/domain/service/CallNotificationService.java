@@ -36,9 +36,16 @@ public class CallNotificationService {
 
 
     public void sendIncomingCallNotification(CallNotificationRequest request) {
+        log.info("🚀 Starting call notification process for roomId={}, senderId={}, callType={}", 
+                request.getRoomId(), request.getSenderId(), request.getCallType());
+        
         // Check if the calling user (sender) is in a group room or direct message
+        log.info("🔍 Analyzing room type for roomId={}", request.getRoomId());
         String roomType = getUserRoomType(request.getRoomId());
         boolean isGroupCall = "group_room".equals(roomType);
+        
+        log.info("📊 Room analysis result: roomId={}, roomType={}, isGroupCall={}", 
+                request.getRoomId(), roomType, isGroupCall);
         
         String groupName = null;
         String notificationTitle;
@@ -46,16 +53,20 @@ public class CallNotificationService {
         
         if (isGroupCall) {
             // It's a group call - get group name
+            log.info("👥 Group call detected! Getting group name for roomId={}", request.getRoomId());
             groupName = getGroupName(request.getRoomId());
             notificationTitle = "Incoming " + request.getCallType() + " call in " + (groupName != null ? groupName : "group");
             notificationBody = request.getSenderId() + " is calling";
-            log.info("Group call detected for roomId={}, groupName={}, sender={}", request.getRoomId(), groupName, request.getSenderId());
+            log.info("✅ Group call setup complete: roomId={}, groupName={}, sender={}, title={}", 
+                    request.getRoomId(), groupName, request.getSenderId(), notificationTitle);
         } else {
             // It's a direct message - use sender name
+            log.info("💬 Direct call detected! Getting sender display name for senderId={}", request.getSenderId());
             String senderName = getSenderDisplayName(request.getSenderId());
             notificationTitle = "Incoming " + request.getCallType() + " call";
             notificationBody = senderName + " is calling";
-            log.info("Direct call detected for roomId={}, sender={}, senderName={}", request.getRoomId(), request.getSenderId(), senderName);
+            log.info("✅ Direct call setup complete: roomId={}, sender={}, senderName={}, title={}", 
+                    request.getRoomId(), request.getSenderId(), senderName, notificationTitle);
         }
 
         Map<String, String> data = new HashMap<>();
@@ -92,14 +103,18 @@ public class CallNotificationService {
             if (request.getGroupName() != null) {
                 data.put("groupName", request.getGroupName());
             }
+            log.info("📦 Added group call data: isGroupCall=true, groupName={}", groupName);
         } else {
             data.put("isGroupCall", "false");
+            log.info("📦 Added direct call data: isGroupCall=false");
         }
+        
+        log.info("📋 Final notification data payload: {}", data);
 
-        log.info("Resolving members for roomId={}, roomType={}", request.getRoomId(), roomType);
+        log.info("👥 Resolving members for roomId={}, roomType={}", request.getRoomId(), roomType);
         String senderMxid = request.getSenderId();
         List<String> roomMembers = membershipRepository.findByRoomIdAndMembership(request.getRoomId(), "join").stream().map(m -> m.getUserId()).filter(u -> !u.equals(senderMxid)).distinct().collect(Collectors.toList());
-        log.info("Room members to notify (excluding sender): {}", roomMembers);
+        log.info("📝 Room members to notify (excluding sender): count={}, members={}", roomMembers.size(), roomMembers);
 
         List<Pusher> pushers = List.of();
         if (!roomMembers.isEmpty()) {
@@ -114,10 +129,10 @@ public class CallNotificationService {
             }
         }
 
-        log.info("Loaded pushers: count={} (members={}, triedLocalsFallback={})", pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
+        log.info("📱 Loaded pushers: count={} (members={}, triedLocalsFallback={})", pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
         
         // Log all pushers before filtering
-        log.info("All pushers found:");
+        log.info("📱 All pushers found:");
         pushers.forEach(p -> log.info("  - user={}, appId={}, hasToken={}", 
             p.getUserName(), p.getAppId(), p.getPushkey() != null && !p.getPushkey().isBlank()));
         
@@ -138,12 +153,12 @@ public class CallNotificationService {
             .filter(p -> "com.pareza.pro".equals(p.getAppId()))
             .collect(Collectors.toList());
             
-        log.info("VoIP pushers (iOS): count={}", voipPushers.size());
+        log.info("🍎 VoIP pushers (iOS): count={}", voipPushers.size());
         voipPushers.forEach(p -> log.info("  - user={}, appId={}, token={}", 
             p.getUserName(), p.getAppId(), 
             p.getPushkey() != null ? p.getPushkey() : "NULL"));
             
-        log.info("Android pushers: count={}", androidPushers.size());
+        log.info("🤖 Android pushers: count={}", androidPushers.size());
         androidPushers.forEach(p -> log.info("  - user={}, appId={}, token={}", 
             p.getUserName(), p.getAppId(), 
             p.getPushkey() != null ? p.getPushkey() : "NULL"));
@@ -195,8 +210,10 @@ public class CallNotificationService {
         allFutures.addAll(androidFutures);
 
         CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0])).join();
-        log.info("Completed sends for roomId={} totalMembers={} voipPushers={} androidPushers={} totalFutures={}", 
+        log.info("✅ Completed notification sends for roomId={} totalMembers={} voipPushers={} androidPushers={} totalFutures={}", 
             request.getRoomId(), roomMembers.size(), voipPushers.size(), androidPushers.size(), allFutures.size());
+        log.info("🎯 Final notification summary: roomType={}, isGroupCall={}, title={}, body={}", 
+            roomType, isGroupCall, notificationTitle, notificationBody);
     }
 
 
@@ -359,9 +376,11 @@ public class CallNotificationService {
      */
     private String getUserRoomType(String roomId) {
         if (roomId == null || roomId.isBlank()) {
+            log.warn("⚠️ Room ID is null or blank, defaulting to likely_dm");
             return "likely_dm";
         }
 
+        log.info("🔍 Executing room type query for roomId={}", roomId);
         String sql = """
             SELECT 
                 CASE 
@@ -380,10 +399,10 @@ public class CallNotificationService {
 
         try {
             String roomType = jdbcTemplate.queryForObject(sql, String.class, roomId);
-            log.debug("Room {} analysis: type={}", roomId, roomType);
+            log.info("📊 Room type query result: roomId={}, roomType={}", roomId, roomType);
             return roomType != null ? roomType : "likely_dm";
         } catch (Exception e) {
-            log.warn("Error analyzing room {}: {}, defaulting to likely_dm", roomId, e.getMessage());
+            log.error("❌ Error analyzing room {}: {}, defaulting to likely_dm", roomId, e.getMessage(), e);
             return "likely_dm"; // Default to direct message if we can't determine
         }
     }
@@ -395,9 +414,11 @@ public class CallNotificationService {
      */
     private String getGroupName(String roomId) {
         if (roomId == null || roomId.isBlank()) {
+            log.warn("⚠️ Room ID is null or blank for group name query");
             return null;
         }
 
+        log.info("🏷️ Getting group name for roomId={}", roomId);
         String sql = """
             SELECT 
                 COALESCE(
@@ -409,10 +430,10 @@ public class CallNotificationService {
 
         try {
             String groupName = jdbcTemplate.queryForObject(sql, String.class, roomId, roomId);
-            log.debug("Group name for room {}: {}", roomId, groupName);
+            log.info("🏷️ Group name query result: roomId={}, groupName={}", roomId, groupName);
             return groupName;
         } catch (Exception e) {
-            log.warn("Error getting group name for room {}: {}", roomId, e.getMessage());
+            log.error("❌ Error getting group name for room {}: {}, using default", roomId, e.getMessage(), e);
             return "Group Chat"; // Default group name
         }
     }
@@ -424,9 +445,11 @@ public class CallNotificationService {
      */
     private String getSenderDisplayName(String senderId) {
         if (senderId == null || senderId.isBlank()) {
+            log.warn("⚠️ Sender ID is null or blank, using default");
             return "Unknown User";
         }
 
+        log.info("👤 Getting display name for senderId={}", senderId);
         String sql = """
             SELECT 
                 COALESCE(
@@ -438,10 +461,10 @@ public class CallNotificationService {
 
         try {
             String displayName = jdbcTemplate.queryForObject(sql, String.class, senderId, senderId, senderId);
-            log.debug("Display name for sender {}: {}", senderId, displayName);
+            log.info("👤 Display name query result: senderId={}, displayName={}", senderId, displayName);
             return displayName != null ? displayName : senderId;
         } catch (Exception e) {
-            log.warn("Error getting display name for sender {}: {}", senderId, e.getMessage());
+            log.error("❌ Error getting display name for sender {}: {}, using senderId", senderId, e.getMessage(), e);
             return senderId; // Fallback to user ID
         }
     }
