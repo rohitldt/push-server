@@ -46,26 +46,49 @@ public class CallNotificationService {
         log.info("📊 User room analysis result: roomId={}, callingUser={}, isGroupCall={}", 
                 request.getRoomId(), request.getSenderId(), isGroupCall);
         
+        // Clear decision log
+        if (isGroupCall) {
+            log.info("🎯 DECISION: This is a GROUP CALL - will show group name in notification");
+        } else {
+            log.info("🎯 DECISION: This is a DIRECT CALL - will show sender name in notification");
+        }
+        
         String groupName = null;
         String notificationTitle;
         String notificationBody;
         
         if (isGroupCall) {
             // It's a group call - get group name
-            log.info("👥 Group call detected! Getting group name for roomId={}", request.getRoomId());
+            log.info("👥 ===== GROUP CALL DETECTED =====");
+            log.info("👥 Calling user {} is in a GROUP ROOM", request.getSenderId());
+            log.info("👥 Room ID: {}", request.getRoomId());
+            log.info("👥 Getting group name for roomId={}", request.getRoomId());
             groupName = getGroupName(request.getRoomId());
             notificationTitle = "Incoming " + request.getCallType() + " call in " + (groupName != null ? groupName : "group");
             notificationBody = request.getSenderId() + " is calling";
-            log.info("✅ Group call setup complete: roomId={}, groupName={}, sender={}, title={}", 
-                    request.getRoomId(), groupName, request.getSenderId(), notificationTitle);
+            log.info("✅ Group call setup complete:");
+            log.info("   📍 Room: {}", request.getRoomId());
+            log.info("   👤 Sender: {}", request.getSenderId());
+            log.info("   🏷️ Group Name: {}", groupName);
+            log.info("   📱 Title: {}", notificationTitle);
+            log.info("   💬 Body: {}", notificationBody);
+            log.info("👥 ===== END GROUP CALL =====");
         } else {
             // It's a direct message - use sender name
-            log.info("💬 Direct call detected! Getting sender display name for senderId={}", request.getSenderId());
+            log.info("💬 ===== DIRECT CALL DETECTED =====");
+            log.info("💬 Calling user {} is in a DIRECT MESSAGE", request.getSenderId());
+            log.info("💬 Room ID: {}", request.getRoomId());
+            log.info("💬 Getting sender display name for senderId={}", request.getSenderId());
             String senderName = getSenderDisplayName(request.getSenderId());
             notificationTitle = "Incoming " + request.getCallType() + " call";
             notificationBody = senderName + " is calling";
-            log.info("✅ Direct call setup complete: roomId={}, sender={}, senderName={}, title={}", 
-                    request.getRoomId(), request.getSenderId(), senderName, notificationTitle);
+            log.info("✅ Direct call setup complete:");
+            log.info("   📍 Room: {}", request.getRoomId());
+            log.info("   👤 Sender: {}", request.getSenderId());
+            log.info("   👤 Sender Name: {}", senderName);
+            log.info("   📱 Title: {}", notificationTitle);
+            log.info("   💬 Body: {}", notificationBody);
+            log.info("💬 ===== END DIRECT CALL =====");
         }
 
         Map<String, String> data = new HashMap<>();
@@ -100,14 +123,14 @@ public class CallNotificationService {
             }
             // Also add the group name from request if provided
             if (request.getGroupName() != null) {
-                data.put("groupName", request.getGroupName());
+            data.put("groupName", request.getGroupName());
             }
             log.info("📦 Added group call data: isGroupCall=true, groupName={}", groupName);
         } else {
             data.put("isGroupCall", "false");
             log.info("📦 Added direct call data: isGroupCall=false");
         }
-        
+
         log.info("📋 Final notification data payload: {}", data);
 
         log.info("👥 Resolving members for roomId={}, isGroupCall={}", request.getRoomId(), isGroupCall);
