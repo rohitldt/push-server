@@ -41,10 +41,18 @@ public class CallNotificationService {
         
         // Check if the calling user (sender) is in a group room or direct message
         log.info("🔍 Analyzing if calling user {} is in a group room for roomId={}", request.getSenderId(), request.getRoomId());
-        boolean isGroupCall = isUserInGroupRoom(request.getSenderId(), request.getRoomId());
         
-        log.info("📊 User room analysis result: roomId={}, callingUser={}, isGroupCall={}", 
-                request.getRoomId(), request.getSenderId(), isGroupCall);
+        boolean isGroupCall = false;
+        try {
+            isGroupCall = isUserInGroupRoom(request.getSenderId(), request.getRoomId());
+            log.info("📊 User room analysis result: roomId={}, callingUser={}, isGroupCall={}", 
+                    request.getRoomId(), request.getSenderId(), isGroupCall);
+        } catch (Exception e) {
+            log.error("❌ Error in group call detection: {}", e.getMessage(), e);
+            isGroupCall = false; // Default to direct call on error
+            log.info("📊 User room analysis result (error fallback): roomId={}, callingUser={}, isGroupCall={}", 
+                    request.getRoomId(), request.getSenderId(), isGroupCall);
+        }
         
         // Clear decision log
         if (isGroupCall) {
@@ -128,7 +136,10 @@ public class CallNotificationService {
             log.info("📦 Added group call data: isGroupCall=true, groupName={}", groupName);
         } else {
             data.put("isGroupCall", "false");
-            log.info("📦 Added direct call data: isGroupCall=false");
+            // For direct calls, add sender name to data payload
+            String senderName = getSenderDisplayName(request.getSenderId());
+            data.put("senderName", senderName);
+            log.info("📦 Added direct call data: isGroupCall=false, senderName={}", senderName);
         }
 
         log.info("📋 Final notification data payload: {}", data);
