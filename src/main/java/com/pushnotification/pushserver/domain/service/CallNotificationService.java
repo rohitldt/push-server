@@ -139,10 +139,10 @@ public class CallNotificationService {
         }
         
         // Add URL to payload
-        String url = "https://app.pareza.im/call/" + request.getRoomId();
+        String url = request.getUrl();
         data.put("url", url);
         log.info("PAYLOAD_URL_ADDED - Added URL to payload [roomId={}, url={}]", 
-                request.getRoomId(), url);
+                request.getUrl(), url);
         
         log.info("NOTIFICATION_PAYLOAD - Final data payload prepared [roomId={}, payloadSize={}, keys={}, payload={}]", 
                 request.getRoomId(), data.size(), data.keySet(), data);

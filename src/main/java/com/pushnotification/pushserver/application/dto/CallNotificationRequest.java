@@ -12,6 +12,7 @@ public class CallNotificationRequest {
     private String senderName;
     private String groupName; // Optional: for group calls
     // Optional: for reject flow; forwarded when present
+    private String url;
     private Boolean reject;
 }
 
