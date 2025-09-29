@@ -79,16 +79,25 @@ public class CallNotificationService {
             log.info("GROUP_CALL_PROCESSING - Processing group call notification [roomId={}, senderId={}]", 
                     request.getRoomId(), request.getSenderId());
             
-            // Use groupName from request if available, otherwise use "Group call"
+            // Use groupName from request if available, otherwise try database
             if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
                 groupName = request.getGroupName();
                 notificationTitle = "Incoming " + request.getCallType() + " call in " + groupName;
                 log.info("GROUP_CALL_WITH_NAME - Group call with name from request [roomId={}, groupName={}]", 
                         request.getRoomId(), groupName);
             } else {
-                notificationTitle = "Incoming " + request.getCallType() + " call";
-                log.info("GROUP_CALL_WITHOUT_NAME - Group call without name, using generic title [roomId={}]", 
-                        request.getRoomId());
+                // Try to get group name from database
+                log.debug("GROUP_NAME_FROM_REQUEST_MISSING - Group name not in request, querying database [roomId={}]", request.getRoomId());
+                groupName = getGroupName(request.getRoomId());
+                if (groupName != null && !groupName.isBlank()) {
+                    notificationTitle = "Incoming " + request.getCallType() + " call in " + groupName;
+                    log.info("GROUP_CALL_WITH_DB_NAME - Group call with name from database [roomId={}, groupName={}]", 
+                            request.getRoomId(), groupName);
+                } else {
+                    notificationTitle = "Incoming " + request.getCallType() + " call";
+                    log.info("GROUP_CALL_WITHOUT_NAME - Group call without name, using generic title [roomId={}]", 
+                            request.getRoomId());
+                }
             }
             notificationBody = request.getSenderId() + " is calling";
             
