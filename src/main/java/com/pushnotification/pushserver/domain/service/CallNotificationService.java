@@ -44,7 +44,7 @@ public class CallNotificationService {
                 request.getRoomId(), request.getSenderId(), request.getCallType(), 
                 request.getSenderName(), request.getGroupName(), request.getReject());
         
-        // Determine if it's a group call based on request data
+        // Determine if it's a group call based on request data - if groupName is present, it's a group call
         boolean isGroupCall = request.getGroupName() != null && !request.getGroupName().isBlank();
         
         log.info("CALL_TYPE_DECISION - Call type determined from request [roomId={}, isGroupCall={}, groupName={}]", 
@@ -139,12 +139,17 @@ public class CallNotificationService {
         }
         
         // Add URL to payload
-        data.put("url", "https://app.pareza.im/call/" + request.getRoomId());
+        String url = "https://app.pareza.im/call/" + request.getRoomId();
+        data.put("url", url);
         log.info("PAYLOAD_URL_ADDED - Added URL to payload [roomId={}, url={}]", 
-                request.getRoomId(), "https://app.pareza.im/call/" + request.getRoomId());
+                request.getRoomId(), url);
         
         log.info("NOTIFICATION_PAYLOAD - Final data payload prepared [roomId={}, payloadSize={}, keys={}, payload={}]", 
                 request.getRoomId(), data.size(), data.keySet(), data);
+        
+        // Debug: Log the exact data being sent to FCM and APNs
+        log.info("FINAL_PAYLOAD_DEBUG - Data map being sent to FCM/APNs [roomId={}, containsUrl={}, urlValue={}]", 
+                request.getRoomId(), data.containsKey("url"), data.get("url"));
 
         log.info("MEMBER_RESOLUTION_START - Resolving room members for notification [roomId={}, isGroupCall={}]", 
                 request.getRoomId(), isGroupCall);
@@ -216,6 +221,7 @@ public class CallNotificationService {
             boolean whitespaceTrimmed = token != null && !token.equals(trimmed);
             log.info("Sending to user={}, appId={}, platform=iOS, token={}", p.getUserName(), p.getAppId(), token);
             log.info("Token diagnostics: rawLen={}, trimmedLen={}, whitespaceTrimmed={}, startsWithSpace={}, endsWithSpace={}", token == null ? 0 : token.length(), trimmed == null ? 0 : trimmed.length(), whitespaceTrimmed, token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(0)), token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(token.length() - 1)));
+            log.info("APNS_DATA_PAYLOAD - Data being sent to APNs [user={}, dataKeys={}, urlPresent={}]", p.getUserName(), data.keySet(), data.containsKey("url"));
             
             // Since we filtered for com.pareza.pro.ios.voip, this is always iOS VoIP
             String iosTokenHex = normalizeIosToken(token);
@@ -233,6 +239,7 @@ public class CallNotificationService {
             String token = p.getPushkey();
             
             log.info("Sending to user={}, appId={}, platform=Android, token={}", p.getUserName(), p.getAppId(), token);
+            log.info("FCM_DATA_PAYLOAD - Data being sent to FCM [user={}, dataKeys={}, urlPresent={}]", p.getUserName(), data.keySet(), data.containsKey("url"));
             
             return fcmPushService.send(token, notificationTitle, notificationBody, data).thenAccept(result -> {
                 if (result.success()) {
