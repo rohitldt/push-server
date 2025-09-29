@@ -44,31 +44,11 @@ public class CallNotificationService {
                 request.getRoomId(), request.getSenderId(), request.getCallType(), 
                 request.getSenderName(), request.getGroupName(), request.getReject());
         
-        // Check if the calling user (sender) is in a group room or direct message
-        log.debug("ROOM_ANALYSIS_START - Analyzing room type for user [userId={}, roomId={}]", 
-                request.getSenderId(), request.getRoomId());
+        // Determine if it's a group call based on request data
+        boolean isGroupCall = request.getGroupName() != null && !request.getGroupName().isBlank();
         
-        boolean isGroupCall = false;
-        try {
-            isGroupCall = isUserInGroupRoom(request.getSenderId(), request.getRoomId());
-            log.info("ROOM_ANALYSIS_RESULT - Room type determined [roomId={}, userId={}, isGroupCall={}]", 
-                    request.getRoomId(), request.getSenderId(), isGroupCall);
-        } catch (Exception e) {
-            log.error("ROOM_ANALYSIS_ERROR - Failed to determine room type [roomId={}, userId={}, error={}]", 
-                    request.getRoomId(), request.getSenderId(), e.getMessage(), e);
-            isGroupCall = false; // Default to direct call on error
-            log.warn("ROOM_ANALYSIS_FALLBACK - Using default direct call classification [roomId={}, userId={}]", 
-                    request.getRoomId(), request.getSenderId());
-        }
-        
-        // Log call type decision
-        if (isGroupCall) {
-            log.info("CALL_TYPE_DECISION - Group call detected, will display group name [roomId={}, userId={}]", 
-                    request.getRoomId(), request.getSenderId());
-        } else {
-            log.info("CALL_TYPE_DECISION - Direct call detected, will display sender name [roomId={}, userId={}]", 
-                    request.getRoomId(), request.getSenderId());
-        }
+        log.info("CALL_TYPE_DECISION - Call type determined from request [roomId={}, isGroupCall={}, groupName={}]", 
+                request.getRoomId(), isGroupCall, request.getGroupName());
         
         String groupName = null;
         String notificationTitle;
@@ -79,25 +59,16 @@ public class CallNotificationService {
             log.info("GROUP_CALL_PROCESSING - Processing group call notification [roomId={}, senderId={}]", 
                     request.getRoomId(), request.getSenderId());
             
-            // Use groupName from request if available, otherwise try database
+            // Use groupName from request if available, otherwise use generic title
             if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
                 groupName = request.getGroupName();
                 notificationTitle = "Incoming " + request.getCallType() + " call in " + groupName;
                 log.info("GROUP_CALL_WITH_NAME - Group call with name from request [roomId={}, groupName={}]", 
                         request.getRoomId(), groupName);
             } else {
-                // Try to get group name from database
-                log.debug("GROUP_NAME_FROM_REQUEST_MISSING - Group name not in request, querying database [roomId={}]", request.getRoomId());
-                groupName = getGroupName(request.getRoomId());
-                if (groupName != null && !groupName.isBlank()) {
-                    notificationTitle = "Incoming " + request.getCallType() + " call in " + groupName;
-                    log.info("GROUP_CALL_WITH_DB_NAME - Group call with name from database [roomId={}, groupName={}]", 
-                            request.getRoomId(), groupName);
-                } else {
-                    notificationTitle = "Incoming " + request.getCallType() + " call";
-                    log.info("GROUP_CALL_WITHOUT_NAME - Group call without name, using generic title [roomId={}]", 
-                            request.getRoomId());
-                }
+                notificationTitle = "Incoming " + request.getCallType() + " call";
+                log.info("GROUP_CALL_WITHOUT_NAME - Group call without name, using generic title [roomId={}]", 
+                        request.getRoomId());
             }
             notificationBody = request.getSenderId() + " is calling";
             
@@ -150,7 +121,7 @@ public class CallNotificationService {
                     request.getGroupName() != null && request.getGroupName().isBlank());
             
             if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
-                data.put("groupName", request.getGroupName());
+            data.put("groupName", request.getGroupName());
                 log.info("PAYLOAD_DATA_GROUP - Added group call data to payload [roomId={}, groupNameFromRequest={}]", 
                         request.getRoomId(), request.getGroupName());
             } else {
@@ -166,6 +137,11 @@ public class CallNotificationService {
             log.debug("PAYLOAD_DATA_DIRECT - Added direct call data to payload [roomId={}, senderName={}]", 
                     request.getRoomId(), senderName);
         }
+        
+        // Add URL to payload
+        data.put("url", "https://app.pareza.im/call/" + request.getRoomId());
+        log.info("PAYLOAD_URL_ADDED - Added URL to payload [roomId={}, url={}]", 
+                request.getRoomId(), "https://app.pareza.im/call/" + request.getRoomId());
         
         log.info("NOTIFICATION_PAYLOAD - Final data payload prepared [roomId={}, payloadSize={}, keys={}, payload={}]", 
                 request.getRoomId(), data.size(), data.keySet(), data);
@@ -471,122 +447,7 @@ public class CallNotificationService {
         }
     }
 
-    /**
-     * Checks if a specific user is in a group room based on your data structure
-     * This method uses the exact query you provided to determine room types
-     * @param userId The user ID to check
-     * @param roomId The room ID to check
-     * @return true if the user is in a group room, false if direct message
-     */
-    private boolean isUserInGroupRoom(String userId, String roomId) {
-        if (userId == null || userId.isBlank() || roomId == null || roomId.isBlank()) {
-            log.warn("USER_ROOM_CHECK_INVALID - User ID or Room ID is null/blank, defaulting to direct message [userId={}, roomId={}]", 
-                    userId, roomId);
-            return false;
-        }
 
-        log.debug("USER_ROOM_CHECK_START - Checking if user is in group room [userId={}, roomId={}]", userId, roomId);
-        // Query that handles both array and object structures in account_data.content
-        String sql = """
-            SELECT 
-                CASE 
-                    WHEN ad.content IS NOT NULL THEN 'direct_message'
-                    WHEN rsc.joined_members <= 2 THEN 'likely_dm'
-                    ELSE 'group_room'
-                END AS room_type
-            FROM rooms r
-            LEFT JOIN room_stats_current rsc ON r.room_id = rsc.room_id
-            LEFT JOIN account_data ad ON ad.user_id = ? 
-                AND ad.account_data_type = 'm.direct'
-                AND (
-                    CASE 
-                        WHEN jsonb_typeof(ad.content) = 'array' THEN
-                            r.room_id = ANY (SELECT jsonb_array_elements_text(ad.content::jsonb))
-                        WHEN jsonb_typeof(ad.content) = 'object' THEN
-                            r.room_id = ANY (SELECT jsonb_array_elements_text(ad.content::jsonb->'rooms'))
-                        ELSE FALSE
-                    END
-                )
-            WHERE r.room_id = ?
-            """;
-
-        try {
-            String roomType = jdbcTemplate.queryForObject(sql, String.class, userId, roomId);
-            boolean isGroup = "group_room".equals(roomType);
-            log.debug("USER_ROOM_CHECK_RESULT - User room type analysis completed [userId={}, roomId={}, roomType={}, isGroup={}]", 
-                    userId, roomId, roomType, isGroup);
-            return isGroup;
-        } catch (Exception e) {
-            log.warn("USER_ROOM_CHECK_ERROR - Primary query failed, trying fallback [userId={}, roomId={}, error={}]", 
-                    userId, roomId, e.getMessage());
-            
-            // Fallback query that only uses room_stats_current
-            try {
-                String fallbackSql = """
-                    SELECT 
-                        CASE 
-                            WHEN rsc.joined_members <= 2 THEN 'likely_dm'
-                            ELSE 'group_room'
-                        END AS room_type
-                    FROM rooms r
-                    LEFT JOIN room_stats_current rsc ON r.room_id = rsc.room_id
-                    WHERE r.room_id = ?
-                    """;
-                
-                String roomType = jdbcTemplate.queryForObject(fallbackSql, String.class, roomId);
-                boolean isGroup = "group_room".equals(roomType);
-                log.debug("USER_ROOM_CHECK_FALLBACK_RESULT - Fallback query completed [userId={}, roomId={}, roomType={}, isGroup={}]", 
-                        userId, roomId, roomType, isGroup);
-                return isGroup;
-            } catch (Exception fallbackError) {
-                log.error("USER_ROOM_CHECK_FALLBACK_ERROR - Both queries failed [userId={}, roomId={}, error={}]", 
-                        userId, roomId, fallbackError.getMessage(), fallbackError);
-                return false; // Default to direct message if we can't determine
-            }
-        }
-    }
-
-    /**
-     * Gets the group name for a room
-     * @param roomId The room ID
-     * @return The group name or null if not found
-     */
-    private String getGroupName(String roomId) {
-        if (roomId == null || roomId.isBlank()) {
-            log.warn("GROUP_NAME_INVALID - Room ID is null or blank for group name query [roomId={}]", roomId);
-            return null;
-        }
-
-        log.debug("GROUP_NAME_QUERY_START - Getting group name for room [roomId={}]", roomId);
-        
-        // Try different possible table structures for group names
-        String[] queries = {
-            // Try room_data table with name
-            "SELECT content->>'name' FROM room_data WHERE room_id = ? AND type = 'm.room.name'",
-            // Try room_data table with topic
-            "SELECT content->>'topic' FROM room_data WHERE room_id = ? AND type = 'm.room.topic'",
-            // Try rooms table with name column
-            "SELECT name FROM rooms WHERE room_id = ?",
-            // Try rooms table with topic column
-            "SELECT topic FROM rooms WHERE room_id = ?"
-        };
-
-        for (String sql : queries) {
-            try {
-                String groupName = jdbcTemplate.queryForObject(sql, String.class, roomId);
-                if (groupName != null && !groupName.trim().isEmpty()) {
-                    log.debug("GROUP_NAME_QUERY_SUCCESS - Group name found [roomId={}, groupName={}]", roomId, groupName);
-                    return groupName;
-                }
-            } catch (Exception e) {
-                log.debug("GROUP_NAME_QUERY_ATTEMPT_FAILED - Query failed, trying next [roomId={}, error={}]", roomId, e.getMessage());
-                // Continue to next query
-            }
-        }
-
-        log.warn("GROUP_NAME_QUERY_FALLBACK - No group name found, using default [roomId={}]", roomId);
-        return "Group Chat"; // Default group name
-    }
 
     /**
      * Gets the display name for a sender user
