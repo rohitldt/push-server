@@ -43,8 +43,7 @@ public class CallNotificationService {
         log.info("REQUEST_DETAILS - Complete request data [roomId={}, senderId={}, callType={}, senderName={}, groupName={}, reject={}]", 
                 request.getRoomId(), request.getSenderId(), request.getCallType(), 
                 request.getSenderName(), request.getGroupName(), request.getReject());
-        
-        // Determine if it's a group call based on request data - if groupName is present, it's a group call
+
         boolean isGroupCall = request.getGroupName() != null && !request.getGroupName().isBlank();
         
         log.info("CALL_TYPE_DECISION - Call type determined from request [roomId={}, isGroupCall={}, groupName={}]", 
@@ -138,11 +137,16 @@ public class CallNotificationService {
                     request.getRoomId(), senderName);
         }
         
-        // Add URL to payload
+        // Add URL to payload only if it's not null
         String url = request.getUrl();
-        data.put("url", url);
-        log.info("PAYLOAD_URL_ADDED - Added URL to payload [roomId={}, url={}]", 
-                request.getUrl(), url);
+        if (url != null && !url.isBlank()) {
+            data.put("url", url);
+            log.info("PAYLOAD_URL_FROM_REQUEST - Added URL from request [roomId={}, url={}]", 
+                    request.getRoomId(), url);
+        } else {
+            log.info("PAYLOAD_URL_SKIPPED - URL is null/blank, not adding to payload [roomId={}]", 
+                    request.getRoomId());
+        }
         
         log.info("NOTIFICATION_PAYLOAD - Final data payload prepared [roomId={}, payloadSize={}, keys={}, payload={}]", 
                 request.getRoomId(), data.size(), data.keySet(), data);
