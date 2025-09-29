@@ -61,11 +61,11 @@ public class CallNotificationService {
             // Use groupName from request if available, otherwise use generic title
             if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
                 groupName = request.getGroupName();
-                notificationTitle = "Incoming " + request.getCallType() + " call in " + groupName;
+                notificationTitle = "Incoming group " + request.getCallType() + " call";
                 log.info("GROUP_CALL_WITH_NAME - Group call with name from request [roomId={}, groupName={}]", 
                         request.getRoomId(), groupName);
             } else {
-                notificationTitle = "Incoming " + request.getCallType() + " call";
+                notificationTitle = "Incoming group " + request.getCallType() + " call";
                 log.info("GROUP_CALL_WITHOUT_NAME - Group call without name, using generic title [roomId={}]", 
                         request.getRoomId());
             }
