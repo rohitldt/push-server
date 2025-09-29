@@ -43,6 +43,8 @@ public class CallNotificationService {
         log.info("REQUEST_DETAILS - Complete request data [roomId={}, senderId={}, callType={}, senderName={}, groupName={}, reject={}]", 
                 request.getRoomId(), request.getSenderId(), request.getCallType(), 
                 request.getSenderName(), request.getGroupName(), request.getReject());
+        // Log full raw request object
+        log.info("REQUEST_RAW - {}", request);
 
         boolean isGroupCall = request.getGroupName() != null && !request.getGroupName().isBlank();
         
@@ -52,6 +54,8 @@ public class CallNotificationService {
         String groupName = null;
         String notificationTitle;
         String notificationBody;
+        String callType = request.getCallType() != null ? request.getCallType().toLowerCase() : "call";
+        log.info("REQUEST_NORMALIZED - isGroupCall={}, callTypeNormalized={}", isGroupCall, callType);
         
         if (isGroupCall) {
             // It's a group call - check if groupName is in request
@@ -61,11 +65,11 @@ public class CallNotificationService {
             // Use groupName from request if available, otherwise use generic title
             if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
                 groupName = request.getGroupName();
-                notificationTitle = "Incoming group " + request.getCallType() + " call";
+                notificationTitle = "Incoming group " + callType + " call";
                 log.info("GROUP_CALL_WITH_NAME - Group call with name from request [roomId={}, groupName={}]", 
                         request.getRoomId(), groupName);
             } else {
-                notificationTitle = "Incoming group " + request.getCallType() + " call";
+                notificationTitle = "Incoming group " + callType + " call";
                 log.info("GROUP_CALL_WITHOUT_NAME - Group call without name, using generic title [roomId={}]", 
                         request.getRoomId());
             }
@@ -79,7 +83,7 @@ public class CallNotificationService {
                     request.getRoomId(), request.getSenderId());
             
             String senderName = getSenderDisplayName(request.getSenderId());
-            notificationTitle = "Incoming " + request.getCallType() + " call";
+            notificationTitle = "Incoming " + callType + " call";
             notificationBody = senderName + " is calling";
             
             log.info("DIRECT_CALL_CONFIGURED - Direct call notification configured [roomId={}, senderId={}, senderName={}, title={}]", 
