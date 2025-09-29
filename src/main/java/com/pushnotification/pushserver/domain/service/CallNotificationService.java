@@ -144,13 +144,19 @@ public class CallNotificationService {
         if (isGroupCall) {
             data.put("isGroupCall", "true");
             // Always use groupName from request in payload
+            log.info("PAYLOAD_GROUP_DEBUG - Checking groupName for payload [roomId={}, requestGroupName={}, isNull={}, isBlank={}]", 
+                    request.getRoomId(), request.getGroupName(), 
+                    request.getGroupName() == null, 
+                    request.getGroupName() != null && request.getGroupName().isBlank());
+            
             if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
                 data.put("groupName", request.getGroupName());
                 log.info("PAYLOAD_DATA_GROUP - Added group call data to payload [roomId={}, groupNameFromRequest={}]", 
                         request.getRoomId(), request.getGroupName());
             } else {
-                log.warn("PAYLOAD_DATA_GROUP_WARNING - Group call detected but no groupName in request [roomId={}, requestGroupName={}]", 
-                        request.getRoomId(), request.getGroupName());
+                data.put("groupName", "GroupCall");
+                log.info("PAYLOAD_DATA_GROUP_DEFAULT - Group call detected but no groupName in request, using default [roomId={}, groupName=GroupCall]", 
+                        request.getRoomId());
             }
         } else {
             data.put("isGroupCall", "false");
@@ -161,8 +167,8 @@ public class CallNotificationService {
                     request.getRoomId(), senderName);
         }
         
-        log.debug("NOTIFICATION_PAYLOAD - Final data payload prepared [roomId={}, payloadSize={}, keys={}]", 
-                request.getRoomId(), data.size(), data.keySet());
+        log.info("NOTIFICATION_PAYLOAD - Final data payload prepared [roomId={}, payloadSize={}, keys={}, payload={}]", 
+                request.getRoomId(), data.size(), data.keySet(), data);
 
         log.info("MEMBER_RESOLUTION_START - Resolving room members for notification [roomId={}, isGroupCall={}]", 
                 request.getRoomId(), isGroupCall);
