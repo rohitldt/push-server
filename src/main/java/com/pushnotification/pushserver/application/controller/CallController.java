@@ -35,10 +35,12 @@ public class CallController {
         log.info("Call rejected: senderId={}, roomId={}, callType={}", request.getSenderId(), request.getRoomId(), request.getCallType());
         // Use the same sending logic as incoming
         callNotificationService.sendIncomingCallNotification(request);
-        return ResponseEntity.ok(Map.of(
-                "status", "rejected",
-                "reject", request.getReject() == null ? null : request.getReject()
-        ));
+        java.util.Map<String, Object> resp = new java.util.HashMap<>();
+        resp.put("status", "rejected");
+        if (request.getReject() != null) {
+            resp.put("reject", request.getReject());
+        }
+        return ResponseEntity.ok(resp);
     }
 
 }
