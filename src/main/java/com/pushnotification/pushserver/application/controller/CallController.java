@@ -32,7 +32,9 @@ public class CallController {
 
     @PostMapping("/reject")
     public ResponseEntity<Map<String, Object>> reject(@Valid @RequestBody CallNotificationRequest request) {
-        log.info("Call rejected: senderId={}, roomId={}, callType={}", request.getSenderId(), request.getRoomId(), request.getCallType());
+        log.info("Call rejected: senderId={}, roomId={}, callType={}, eventId={}",
+                request.getSenderId(), request.getRoomId(), request.getCallType(), request.getEventId());
+        log.info("Reject request extras: url={}, reject={}", request.getUrl(), request.getReject());
         // Use the same sending logic as incoming
         callNotificationService.sendIncomingCallNotification(request);
         java.util.Map<String, Object> resp = new java.util.HashMap<>();
