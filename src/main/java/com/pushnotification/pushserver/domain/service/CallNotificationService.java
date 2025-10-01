@@ -36,62 +36,35 @@ public class CallNotificationService {
 
 
     public void sendIncomingCallNotification(CallNotificationRequest request) {
-        log.info("CALL_NOTIFICATION_START - Processing incoming call notification [roomId={}, senderId={}, callType={}]", 
-                request.getRoomId(), request.getSenderId(), request.getCallType());
-        
-        // Log complete request details
-        log.info("REQUEST_DETAILS - Complete request data [roomId={}, senderId={}, callType={}, senderName={}, groupName={}, reject={}]", 
-                request.getRoomId(), request.getSenderId(), request.getCallType(), 
-                request.getSenderName(), request.getGroupName(), request.getReject());
-        // Log full raw request object
-        log.info("REQUEST_RAW - {}", request);
 
         boolean isGroupCall = request.getGroupName() != null && !request.getGroupName().isBlank();
-        
-        log.info("CALL_TYPE_DECISION - Call type determined from request [roomId={}, isGroupCall={}, groupName={}]", 
-                request.getRoomId(), isGroupCall, request.getGroupName());
-        
+
         String groupName = null;
         String notificationTitle;
         String notificationBody;
         String callType = request.getCallType() != null ? request.getCallType().toLowerCase() : "call";
-        log.info("REQUEST_NORMALIZED - isGroupCall={}, callTypeNormalized={}", isGroupCall, callType);
-        
         if (isGroupCall) {
-            // It's a group call - check if groupName is in request
-            log.info("GROUP_CALL_PROCESSING - Processing group call notification [roomId={}, senderId={}]", 
-                    request.getRoomId(), request.getSenderId());
-            
-            // Use groupName from request if available, otherwise use generic title
+            log.info("GROUP_CALL_PROCESSING - Processing group call notification [roomId={}, senderId={}]", request.getRoomId(), request.getSenderId());
             if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
                 groupName = request.getGroupName();
                 notificationTitle = "Incoming group " + callType + " call";
-                log.info("GROUP_CALL_WITH_NAME - Group call with name from request [roomId={}, groupName={}]", 
-                        request.getRoomId(), groupName);
+                log.info("GROUP_CALL_WITH_NAME - Group call with name from request [roomId={}, groupName={}]", request.getRoomId(), groupName);
             } else {
                 notificationTitle = "Incoming group " + callType + " call";
-                log.info("GROUP_CALL_WITHOUT_NAME - Group call without name, using generic title [roomId={}]", 
-                        request.getRoomId());
+                log.info("GROUP_CALL_WITHOUT_NAME - Group call without name, using generic title [roomId={}]", request.getRoomId());
             }
             notificationBody = request.getSenderId() + " is calling";
-            
-            log.info("GROUP_CALL_CONFIGURED - Group call notification configured [roomId={}, senderId={}, groupName={}, title={}]", 
-                    request.getRoomId(), request.getSenderId(), groupName, notificationTitle);
+
+            log.info("GROUP_CALL_CONFIGURED - Group call notification configured [roomId={}, senderId={}, groupName={}, title={}]", request.getRoomId(), request.getSenderId(), groupName, notificationTitle);
         } else {
-            // It's a direct message - use sender name
-            log.info("DIRECT_CALL_PROCESSING - Processing direct call notification [roomId={}, senderId={}]", 
-                    request.getRoomId(), request.getSenderId());
-            
             String senderName = getSenderDisplayName(request.getSenderId());
             notificationTitle = "Incoming " + callType + " call";
             notificationBody = senderName + " is calling";
-            
-            log.info("DIRECT_CALL_CONFIGURED - Direct call notification configured [roomId={}, senderId={}, senderName={}, title={}]", 
-                    request.getRoomId(), request.getSenderId(), senderName, notificationTitle);
+
+            log.info("DIRECT_CALL_CONFIGURED - Direct call notification configured [roomId={}, senderId={}, senderName={}, title={}]", request.getRoomId(), request.getSenderId(), senderName, notificationTitle);
         }
 
         Map<String, String> data = new HashMap<>();
-        // Mandatory keys
         if (request.getRoomId() != null) {
             data.put("roomId", request.getRoomId());
             data.put("room_id", request.getRoomId());
@@ -109,62 +82,46 @@ public class CallNotificationService {
         }
         log.info("VoIP data map to send (pre-APNs): {}", data);
 
-        // Proceed with normal DB/Android/iOS logic below
         if (request.getReject() != null) {
             data.put("reject", String.valueOf(request.getReject()));
         }
 
-        // Add group information if it's a group call
         if (isGroupCall) {
             data.put("isGroupCall", "true");
-            // Always use groupName from request in payload
-            log.info("PAYLOAD_GROUP_DEBUG - Checking groupName for payload [roomId={}, requestGroupName={}, isNull={}, isBlank={}]", 
-                    request.getRoomId(), request.getGroupName(), 
-                    request.getGroupName() == null, 
-                    request.getGroupName() != null && request.getGroupName().isBlank());
-            
+            log.info("PAYLOAD_GROUP_DEBUG - Checking groupName for payload [roomId={}, requestGroupName={}, isNull={}, isBlank={}]", request.getRoomId(), request.getGroupName(), request.getGroupName() == null, request.getGroupName() != null && request.getGroupName().isBlank());
             if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
-            data.put("groupName", request.getGroupName());
-                log.info("PAYLOAD_DATA_GROUP - Added group call data to payload [roomId={}, groupNameFromRequest={}]", 
-                        request.getRoomId(), request.getGroupName());
+                data.put("groupName", request.getGroupName());
+                log.info("PAYLOAD_DATA_GROUP - Added group call data to payload [roomId={}, groupNameFromRequest={}]", request.getRoomId(), request.getGroupName());
             } else {
                 data.put("groupName", "GroupCall");
-                log.info("PAYLOAD_DATA_GROUP_DEFAULT - Group call detected but no groupName in request, using default [roomId={}, groupName=GroupCall]", 
-                        request.getRoomId());
+                log.info("PAYLOAD_DATA_GROUP_DEFAULT - Group call detected but no groupName in request, using default [roomId={}, groupName=GroupCall]", request.getRoomId());
             }
         } else {
             data.put("isGroupCall", "false");
             // For direct calls, add sender name to data payload
             String senderName = getSenderDisplayName(request.getSenderId());
             data.put("senderName", senderName);
-            log.debug("PAYLOAD_DATA_DIRECT - Added direct call data to payload [roomId={}, senderName={}]", 
-                    request.getRoomId(), senderName);
+            log.debug("PAYLOAD_DATA_DIRECT - Added direct call data to payload [roomId={}, senderName={}]", request.getRoomId(), senderName);
         }
-        
+
         // Add URL to payload only if it's not null
         String url = request.getUrl();
         if (url != null && !url.isBlank()) {
             data.put("url", url);
-            log.info("PAYLOAD_URL_FROM_REQUEST - Added URL from request [roomId={}, url={}]", 
-                    request.getRoomId(), url);
+            log.info("PAYLOAD_URL_FROM_REQUEST - Added URL from request [roomId={}, url={}]", request.getRoomId(), url);
         } else {
-            log.info("PAYLOAD_URL_SKIPPED - URL is null/blank, not adding to payload [roomId={}]", 
-                    request.getRoomId());
+            log.info("PAYLOAD_URL_SKIPPED - URL is null/blank, not adding to payload [roomId={}]", request.getRoomId());
         }
-        
-        log.info("NOTIFICATION_PAYLOAD - Final data payload prepared [roomId={}, payloadSize={}, keys={}, payload={}]", 
-                request.getRoomId(), data.size(), data.keySet(), data);
-        
-        // Debug: Log the exact data being sent to FCM and APNs
-        log.info("FINAL_PAYLOAD_DEBUG - Data map being sent to FCM/APNs [roomId={}, containsUrl={}, urlValue={}]", 
-                request.getRoomId(), data.containsKey("url"), data.get("url"));
 
-        log.info("MEMBER_RESOLUTION_START - Resolving room members for notification [roomId={}, isGroupCall={}]", 
-                request.getRoomId(), isGroupCall);
+        log.info("NOTIFICATION_PAYLOAD - Final data payload prepared [roomId={}, payloadSize={}, keys={}, payload={}]", request.getRoomId(), data.size(), data.keySet(), data);
+
+        // Debug: Log the exact data being sent to FCM and APNs
+        log.info("FINAL_PAYLOAD_DEBUG - Data map being sent to FCM/APNs [roomId={}, containsUrl={}, urlValue={}]", request.getRoomId(), data.containsKey("url"), data.get("url"));
+
+        log.info("MEMBER_RESOLUTION_START - Resolving room members for notification [roomId={}, isGroupCall={}]", request.getRoomId(), isGroupCall);
         String senderMxid = request.getSenderId();
         List<String> roomMembers = membershipRepository.findByRoomIdAndMembership(request.getRoomId(), "join").stream().map(m -> m.getUserId()).filter(u -> !u.equals(senderMxid)).distinct().collect(Collectors.toList());
-        log.info("MEMBER_RESOLUTION_RESULT - Room members identified [roomId={}, memberCount={}, members={}]", 
-                request.getRoomId(), roomMembers.size(), roomMembers);
+        log.info("MEMBER_RESOLUTION_RESULT - Room members identified [roomId={}, memberCount={}, members={}]", request.getRoomId(), roomMembers.size(), roomMembers);
 
         List<Pusher> pushers = List.of();
         if (!roomMembers.isEmpty()) {
@@ -179,46 +136,30 @@ public class CallNotificationService {
             }
         }
 
-        log.info("PUSHER_LOAD_RESULT - Pushers loaded from database [totalPushers={}, roomMembers={}, fallbackUsed={}]", 
-                pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
-        
+        log.info("PUSHER_LOAD_RESULT - Pushers loaded from database [totalPushers={}, roomMembers={}, fallbackUsed={}]", pushers.size(), roomMembers.size(), pushers.isEmpty() ? "yes" : "no");
+
         // Log all pushers before filtering
         log.debug("PUSHER_DETAILS - All pushers found in database:");
-        pushers.forEach(p -> log.debug("PUSHER_ITEM - Pusher details [user={}, appId={}, hasToken={}]", 
-            p.getUserName(), p.getAppId(), p.getPushkey() != null && !p.getPushkey().isBlank()));
-        
+        pushers.forEach(p -> log.debug("PUSHER_ITEM - Pusher details [user={}, appId={}, hasToken={}]", p.getUserName(), p.getAppId(), p.getPushkey() != null && !p.getPushkey().isBlank()));
+
         // Filter for both VoIP (iOS) and FCM (Android) app IDs
-        List<Pusher> voipPushers = pushers.stream()
-            .filter(p -> !request.getSenderId().equals(p.getUserName()))
-            .filter(p -> {
-                String appId = p.getAppId();
-                return appId != null && (
-                        "com.pareza.pro.ios.prod.voip".equals(appId) ||
-                        "com.pareza.pro.ios.dev.voip".equals(appId)
-                );
-            })
-            .collect(Collectors.toList());
-            
-        List<Pusher> androidPushers = pushers.stream()
-            .filter(p -> !request.getSenderId().equals(p.getUserName()))
-            .filter(p -> "com.pareza.pro".equals(p.getAppId()))
-            .collect(Collectors.toList());
-            
+        List<Pusher> voipPushers = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).filter(p -> {
+            String appId = p.getAppId();
+            return appId != null && ("com.pareza.pro.ios.prod.voip".equals(appId) || "com.pareza.pro.ios.dev.voip".equals(appId));
+        }).collect(Collectors.toList());
+
+        List<Pusher> androidPushers = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).filter(p -> "com.pareza.pro".equals(p.getAppId())).collect(Collectors.toList());
+
         log.info("PUSHER_FILTER_IOS - iOS VoIP pushers identified [count={}]", voipPushers.size());
-        voipPushers.forEach(p -> log.debug("PUSHER_IOS - iOS pusher details [user={}, appId={}, tokenLength={}]", 
-            p.getUserName(), p.getAppId(), 
-            p.getPushkey() != null ? p.getPushkey().length() : 0));
-            
+        voipPushers.forEach(p -> log.debug("PUSHER_IOS - iOS pusher details [user={}, appId={}, tokenLength={}]", p.getUserName(), p.getAppId(), p.getPushkey() != null ? p.getPushkey().length() : 0));
+
         log.info("PUSHER_FILTER_ANDROID - Android FCM pushers identified [count={}]", androidPushers.size());
-        androidPushers.forEach(p -> log.debug("PUSHER_ANDROID - Android pusher details [user={}, appId={}, tokenLength={}]", 
-            p.getUserName(), p.getAppId(), 
-            p.getPushkey() != null ? p.getPushkey().length() : 0));
-        
+        androidPushers.forEach(p -> log.debug("PUSHER_ANDROID - Android pusher details [user={}, appId={}, tokenLength={}]", p.getUserName(), p.getAppId(), p.getPushkey() != null ? p.getPushkey().length() : 0));
+
         if (voipPushers.isEmpty() && androidPushers.isEmpty()) {
-            log.warn("PUSHER_WARNING - No valid pushers found for notification [roomId={}, memberCount={}] - Check user registrations", 
-                    request.getRoomId(), roomMembers.size());
+            log.warn("PUSHER_WARNING - No valid pushers found for notification [roomId={}, memberCount={}] - Check user registrations", request.getRoomId(), roomMembers.size());
         }
-        
+
         // Process VoIP pushers (iOS)
         List<CompletableFuture<?>> voipFutures = voipPushers.stream().map(p -> {
             String token = p.getPushkey();
@@ -230,7 +171,7 @@ public class CallNotificationService {
             log.info("Sending to user={}, appId={}, platform=iOS, token={}", p.getUserName(), p.getAppId(), token);
             log.info("Token diagnostics: rawLen={}, trimmedLen={}, whitespaceTrimmed={}, startsWithSpace={}, endsWithSpace={}", token == null ? 0 : token.length(), trimmed == null ? 0 : trimmed.length(), whitespaceTrimmed, token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(0)), token != null && !token.isEmpty() && Character.isWhitespace(token.charAt(token.length() - 1)));
             log.info("APNS_DATA_PAYLOAD - Data being sent to APNs [user={}, dataKeys={}, urlPresent={}]", p.getUserName(), data.keySet(), data.containsKey("url"));
-            
+
             // Since we filtered for com.pareza.pro.ios.voip, this is always iOS VoIP
             String iosTokenHex = normalizeIosToken(token);
             return apnsPushService.sendVoip(iosTokenHex, data).thenAccept(result -> {
@@ -241,14 +182,14 @@ public class CallNotificationService {
                 }
             });
         }).collect(Collectors.toList());
-        
+
         // Process Android pushers (FCM)
         List<CompletableFuture<?>> androidFutures = androidPushers.stream().map(p -> {
             String token = p.getPushkey();
-            
+
             log.info("Sending to user={}, appId={}, platform=Android, token={}", p.getUserName(), p.getAppId(), token);
             log.info("FCM_DATA_PAYLOAD - Data being sent to FCM [user={}, dataKeys={}, urlPresent={}]", p.getUserName(), data.keySet(), data.containsKey("url"));
-            
+
             return fcmPushService.send(token, notificationTitle, notificationBody, data).thenAccept(result -> {
                 if (result.success()) {
                     log.info("✅ FCM SUCCESS for user={}: MessageId={}", p.getUserName(), result.messageId());
@@ -257,17 +198,15 @@ public class CallNotificationService {
                 }
             });
         }).collect(Collectors.toList());
-        
+
         // Combine all futures
         List<CompletableFuture<?>> allFutures = new ArrayList<>();
         allFutures.addAll(voipFutures);
         allFutures.addAll(androidFutures);
 
         CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0])).join();
-        log.info("NOTIFICATION_SEND_COMPLETE - All notifications sent successfully [roomId={}, totalMembers={}, voipPushers={}, androidPushers={}, totalFutures={}]", 
-            request.getRoomId(), roomMembers.size(), voipPushers.size(), androidPushers.size(), allFutures.size());
-        log.info("CALL_NOTIFICATION_SUMMARY - Final notification summary [roomId={}, callingUser={}, isGroupCall={}, title={}, body={}]", 
-            request.getRoomId(), request.getSenderId(), isGroupCall, notificationTitle, notificationBody);
+        log.info("NOTIFICATION_SEND_COMPLETE - All notifications sent successfully [roomId={}, totalMembers={}, voipPushers={}, androidPushers={}, totalFutures={}]", request.getRoomId(), roomMembers.size(), voipPushers.size(), androidPushers.size(), allFutures.size());
+        log.info("CALL_NOTIFICATION_SUMMARY - Final notification summary [roomId={}, callingUser={}, isGroupCall={}, title={}, body={}]", request.getRoomId(), request.getSenderId(), isGroupCall, notificationTitle, notificationBody);
     }
 
 
@@ -324,148 +263,147 @@ public class CallNotificationService {
         return mxid.startsWith("@") ? mxid.substring(1) : mxid;
     }
 
-    private boolean isIosPusher(Pusher pusher) {
-        // Hard-map app IDs to platforms; fallback to token shape only if appId unknown
-        String appId = pusher.getAppId();
-        if (appId != null) {
-            if ("com.pareza.pro.ios.prod".equals(appId) || "com.pareza.pro.ios.dev".equals(appId) || appId.startsWith("com.pareza.pro.ios.")) {
-                return true; // iOS
-            }
-
-            if ("com.pareza.pro".equals(appId)) {
-                return false; // Android
-            }
-        }
-        String token = pusher.getPushkey();
-        return token != null && token.matches("[a-fA-F0-9]{64}");
-    }
+//    private boolean isIosPusher(Pusher pusher) {
+//        // Hard-map app IDs to platforms; fallback to token shape only if appId unknown
+//        String appId = pusher.getAppId();
+//        if (appId != null) {
+//            if ("com.pareza.pro.ios.prod".equals(appId) || "com.pareza.pro.ios.dev".equals(appId) || appId.startsWith("com.pareza.pro.ios.")) {
+//                return true; // iOS
+//            }
+//
+//            if ("com.pareza.pro".equals(appId)) {
+//                return false; // Android
+//            }
+//        }
+//        String token = pusher.getPushkey();
+//        return token != null && token.matches("[a-fA-F0-9]{64}");
+//    }
 
     /**
      * Analyzes room types for a specific user to determine if they are in group rooms or direct messages
+     *
      * @param userId The user ID to analyze (e.g., "@+919306273742:server.pareza.im")
      * @return List of room analysis results
      */
-    public List<RoomAnalysis> analyzeUserRooms(String userId) {
-        String sql = """
-            SELECT 
-                r.room_id,
-                r.creator,
-                rsc.joined_members,
-                CASE 
-                    WHEN ad.content IS NOT NULL THEN 'direct_message'
-                    WHEN rsc.joined_members <= 2 THEN 'likely_dm'
-                    ELSE 'group_room'
-                END AS room_type
-            FROM rooms r
-            LEFT JOIN room_stats_current rsc ON r.room_id = rsc.room_id
-            LEFT JOIN account_data ad ON ad.user_id = ? 
-                AND ad.account_data_type = 'm.direct'
-                AND r.room_id = ANY (
-                    SELECT jsonb_array_elements_text(ad.content::jsonb)
-                )
-            WHERE r.room_id IN (
-                SELECT DISTINCT room_id 
-                FROM room_memberships 
-                WHERE user_id = ? 
-                  AND membership = 'join'
-            )
-            """;
-
-        return jdbcTemplate.query(sql, new Object[]{userId, userId}, this::mapRowToRoomAnalysis);
-    }
+//    public List<RoomAnalysis> analyzeUserRooms(String userId) {
+//        String sql = """
+//                SELECT
+//                    r.room_id,
+//                    r.creator,
+//                    rsc.joined_members,
+//                    CASE
+//                        WHEN ad.content IS NOT NULL THEN 'direct_message'
+//                        WHEN rsc.joined_members <= 2 THEN 'likely_dm'
+//                        ELSE 'group_room'
+//                    END AS room_type
+//                FROM rooms r
+//                LEFT JOIN room_stats_current rsc ON r.room_id = rsc.room_id
+//                LEFT JOIN account_data ad ON ad.user_id = ?
+//                    AND ad.account_data_type = 'm.direct'
+//                    AND r.room_id = ANY (
+//                        SELECT jsonb_array_elements_text(ad.content::jsonb)
+//                    )
+//                WHERE r.room_id IN (
+//                    SELECT DISTINCT room_id
+//                    FROM room_memberships
+//                    WHERE user_id = ?
+//                      AND membership = 'join'
+//                )
+//                """;
+//
+//        return jdbcTemplate.query(sql, new Object[]{userId, userId}, this::mapRowToRoomAnalysis);
+//    }
 
     /**
      * Gets a summary of room types for a user
+     *
      * @param userId The user ID to analyze
      * @return Map with counts of different room types
      */
-    public Map<String, Integer> getUserRoomTypeSummary(String userId) {
-        List<RoomAnalysis> rooms = analyzeUserRooms(userId);
-        
-        Map<String, Integer> summary = new HashMap<>();
-        summary.put("direct_message", 0);
-        summary.put("likely_dm", 0);
-        summary.put("group_room", 0);
-        
-        for (RoomAnalysis room : rooms) {
-            summary.merge(room.roomType(), 1, Integer::sum);
-        }
-        
-        return summary;
-    }
+//    public Map<String, Integer> getUserRoomTypeSummary(String userId) {
+//        List<RoomAnalysis> rooms = analyzeUserRooms(userId);
+//
+//        Map<String, Integer> summary = new HashMap<>();
+//        summary.put("direct_message", 0);
+//        summary.put("likely_dm", 0);
+//        summary.put("group_room", 0);
+//
+//        for (RoomAnalysis room : rooms) {
+//            summary.merge(room.roomType(), 1, Integer::sum);
+//        }
+//
+//        return summary;
+//    }
 
     /**
      * Checks if a user is primarily in group rooms or direct messages
+     *
      * @param userId The user ID to check
      * @return "GROUP_USER" if mostly group rooms, "DM_USER" if mostly direct messages, "MIXED" if balanced
      */
-    public String getUserRoomTypeClassification(String userId) {
-        Map<String, Integer> summary = getUserRoomTypeSummary(userId);
-        
-        int groupRooms = summary.get("group_room");
-        int directMessages = summary.get("direct_message") + summary.get("likely_dm");
-        
-        if (groupRooms > directMessages * 2) {
-            return "GROUP_USER";
-        } else if (directMessages > groupRooms * 2) {
-            return "DM_USER";
-        } else {
-            return "MIXED";
-        }
-    }
+//    public String getUserRoomTypeClassification(String userId) {
+//        Map<String, Integer> summary = getUserRoomTypeSummary(userId);
+//
+//        int groupRooms = summary.get("group_room");
+//        int directMessages = summary.get("direct_message") + summary.get("likely_dm");
+//
+//        if (groupRooms > directMessages * 2) {
+//            return "GROUP_USER";
+//        } else if (directMessages > groupRooms * 2) {
+//            return "DM_USER";
+//        } else {
+//            return "MIXED";
+//        }
+//    }
 
     private RoomAnalysis mapRowToRoomAnalysis(ResultSet rs, int rowNum) throws SQLException {
-        return new RoomAnalysis(
-            rs.getString("room_id"),
-            rs.getString("creator"),
-            rs.getInt("joined_members"),
-            rs.getString("room_type")
-        );
+        return new RoomAnalysis(rs.getString("room_id"), rs.getString("creator"), rs.getInt("joined_members"), rs.getString("room_type"));
     }
 
     /**
      * Gets the room type for a specific room (group_room, likely_dm, or direct_message)
      * This checks if the calling user is in a group room or direct message
+     *
      * @param roomId The room ID to check
      * @return The room type string
      */
-    private String getUserRoomType(String roomId) {
-        if (roomId == null || roomId.isBlank()) {
-            log.warn("ROOM_ANALYSIS_INVALID - Room ID is null or blank, defaulting to likely_dm [roomId={}]", roomId);
-            return "likely_dm";
-        }
-
-        log.debug("ROOM_TYPE_QUERY_START - Executing room type analysis query [roomId={}]", roomId);
-        String sql = """
-            SELECT 
-                CASE 
-                    WHEN ad.content IS NOT NULL THEN 'direct_message'
-                    WHEN rsc.joined_members <= 2 THEN 'likely_dm'
-                    ELSE 'group_room'
-                END AS room_type
-            FROM rooms r
-            LEFT JOIN room_stats_current rsc ON r.room_id = rsc.room_id
-            LEFT JOIN account_data ad ON ad.account_data_type = 'm.direct'
-                AND r.room_id = ANY (
-                    SELECT jsonb_array_elements_text(ad.content::jsonb)
-                )
-            WHERE r.room_id = ?
-            """;
-
-        try {
-            String roomType = jdbcTemplate.queryForObject(sql, String.class, roomId);
-            log.debug("ROOM_TYPE_QUERY_RESULT - Room type analysis completed [roomId={}, roomType={}]", roomId, roomType);
-            return roomType != null ? roomType : "likely_dm";
-        } catch (Exception e) {
-            log.error("ROOM_TYPE_QUERY_ERROR - Failed to analyze room type [roomId={}, error={}]", roomId, e.getMessage(), e);
-            return "likely_dm"; // Default to direct message if we can't determine
-        }
-    }
-
+//    private String getUserRoomType(String roomId) {
+//        if (roomId == null || roomId.isBlank()) {
+//            log.warn("ROOM_ANALYSIS_INVALID - Room ID is null or blank, defaulting to likely_dm [roomId={}]", roomId);
+//            return "likely_dm";
+//        }
+//
+//        log.debug("ROOM_TYPE_QUERY_START - Executing room type analysis query [roomId={}]", roomId);
+//        String sql = """
+//                SELECT
+//                    CASE
+//                        WHEN ad.content IS NOT NULL THEN 'direct_message'
+//                        WHEN rsc.joined_members <= 2 THEN 'likely_dm'
+//                        ELSE 'group_room'
+//                    END AS room_type
+//                FROM rooms r
+//                LEFT JOIN room_stats_current rsc ON r.room_id = rsc.room_id
+//                LEFT JOIN account_data ad ON ad.account_data_type = 'm.direct'
+//                    AND r.room_id = ANY (
+//                        SELECT jsonb_array_elements_text(ad.content::jsonb)
+//                    )
+//                WHERE r.room_id = ?
+//                """;
+//
+//        try {
+//            String roomType = jdbcTemplate.queryForObject(sql, String.class, roomId);
+//            log.debug("ROOM_TYPE_QUERY_RESULT - Room type analysis completed [roomId={}, roomType={}]", roomId, roomType);
+//            return roomType != null ? roomType : "likely_dm";
+//        } catch (Exception e) {
+//            log.error("ROOM_TYPE_QUERY_ERROR - Failed to analyze room type [roomId={}, error={}]", roomId, e.getMessage(), e);
+//            return "likely_dm"; // Default to direct message if we can't determine
+//        }
+//    }
 
 
     /**
      * Gets the display name for a sender user
+     *
      * @param senderId The sender user ID
      * @return The display name or the user ID if not found
      */
@@ -476,18 +414,17 @@ public class CallNotificationService {
         }
 
         log.debug("DISPLAY_NAME_QUERY_START - Getting display name for sender [senderId={}]", senderId);
-        
+
         // Try different possible table structures for display names
         String[] queries = {
-            // Try profiles table with displayname column
-            "SELECT displayname FROM profiles WHERE user_id = ?",
-            // Try profiles table with content JSONB
-            "SELECT content->>'displayname' FROM profiles WHERE user_id = ?",
-            // Try user_directory table
-            "SELECT display_name FROM user_directory WHERE user_id = ?",
-            // Try user_directory with content JSONB
-            "SELECT content->>'displayname' FROM user_directory WHERE user_id = ?"
-        };
+                // Try profiles table with displayname column
+                "SELECT displayname FROM profiles WHERE user_id = ?",
+                // Try profiles table with content JSONB
+                "SELECT content->>'displayname' FROM profiles WHERE user_id = ?",
+                // Try user_directory table
+                "SELECT display_name FROM user_directory WHERE user_id = ?",
+                // Try user_directory with content JSONB
+                "SELECT content->>'displayname' FROM user_directory WHERE user_id = ?"};
 
         for (String sql : queries) {
             try {
@@ -509,12 +446,8 @@ public class CallNotificationService {
     /**
      * Record class to hold room analysis results
      */
-    public record RoomAnalysis(
-        String roomId,
-        String creator,
-        int joinedMembers,
-        String roomType
-    ) {}
+    public record RoomAnalysis(String roomId, String creator, int joinedMembers, String roomType) {
+    }
 }
 
 

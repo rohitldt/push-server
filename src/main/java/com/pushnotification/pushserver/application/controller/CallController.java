@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+
+@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.POST, RequestMethod.OPTIONS})
+@RestController
 @RestController
 @RequestMapping("/api/calls")
 @RequiredArgsConstructor
@@ -27,14 +30,16 @@ public class CallController {
         log.info("Incoming call: senderId={}, roomId={}, callType={}", request.getSenderId(), request.getRoomId(), request.getCallType());
         callNotificationService.sendIncomingCallNotification(request);
         log.info("Processed incoming call for roomId={} from senderId={}", request.getRoomId(), request.getSenderId());
-        return ResponseEntity.ok(Map.of("status", "sent"));
+        java.util.Map<String, Object> resp = new java.util.HashMap<>();
+        resp.put("status", "sent");
+        log.info("Controller response payload (incoming): {}", resp);
+        return ResponseEntity.ok(resp);
     }
 
     @PostMapping("/reject")
     public ResponseEntity<Map<String, Object>> reject(@Valid @RequestBody CallNotificationRequest request) {
-        log.info("Call rejected: senderId={}, roomId={}, callType={}, eventId={}",
-                request.getSenderId(), request.getRoomId(), request.getCallType(), request.getEventId());
-        log.info("Reject request extras: url={}, reject={}", request.getUrl(), request.getReject());
+        log.info("Call rejected: senderId={}, roomId={}, callType={}, eventId={},url={}, reject={}" ,
+                request.getSenderId(), request.getRoomId(), request.getCallType(), request.getEventId(), request.getUrl(), request.getReject());
         // Use the same sending logic as incoming
         callNotificationService.sendIncomingCallNotification(request);
         java.util.Map<String, Object> resp = new java.util.HashMap<>();
@@ -42,6 +47,7 @@ public class CallController {
         if (request.getReject() != null) {
             resp.put("reject", request.getReject());
         }
+        log.info("Controller response payload (reject): {}", resp);
         return ResponseEntity.ok(resp);
     }
 
