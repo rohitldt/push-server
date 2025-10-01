@@ -17,7 +17,6 @@ import java.util.Map;
 
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.POST, RequestMethod.OPTIONS})
 @RestController
-@RestController
 @RequestMapping("/api/calls")
 @RequiredArgsConstructor
 public class CallController {
