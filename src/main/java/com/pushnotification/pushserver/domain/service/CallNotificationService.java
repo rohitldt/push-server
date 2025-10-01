@@ -148,7 +148,7 @@ public class CallNotificationService {
             return appId != null && ("com.pareza.pro.ios.prod.voip".equals(appId) || "com.pareza.pro.ios.dev.voip".equals(appId));
         }).collect(Collectors.toList());
 
-        List<Pusher> androidPushers = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).filter(p -> "com.pareza.pro".equals(p.getAppId())).collect(Collectors.toList());
+        List<Pusher> androidPushers = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).filter(p -> "com.pareza.pro".equals(p.getAppId())|| "1:40238129953:web:90562b7f62c91e22a89460".equals(p.getAppId())).collect(Collectors.toList());
 
         log.info("PUSHER_FILTER_IOS - iOS VoIP pushers identified [count={}]", voipPushers.size());
         voipPushers.forEach(p -> log.debug("PUSHER_IOS - iOS pusher details [user={}, appId={}, tokenLength={}]", p.getUserName(), p.getAppId(), p.getPushkey() != null ? p.getPushkey().length() : 0));

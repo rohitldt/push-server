@@ -10,5 +10,4 @@ public class PushserverApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(PushserverApplication.class, args);
 	}
-
 }
