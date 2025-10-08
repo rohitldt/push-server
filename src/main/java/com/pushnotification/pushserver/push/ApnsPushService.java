@@ -119,7 +119,7 @@ public class ApnsPushService {
                 deviceTokenHex, 
                 topic, 
                 payload,
-                Instant.now().plusSeconds(30), // expiration
+                Instant.now().plusSeconds(60), // expiration
                 DeliveryPriority.IMMEDIATE, // priority
                 PushType.VOIP // push type
         );
