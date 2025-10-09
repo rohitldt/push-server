@@ -41,6 +41,9 @@ public class CallController {
     public ResponseEntity<Map<String, Object>> reject(@Valid @RequestBody CallNotificationRequest request) {
         log.info("Call rejected: senderId={}, roomId={}, callType={}, eventId={},url={}, reject={}" ,
                 request.getSenderId(), request.getRoomId(), request.getCallType(), request.getEventId(), request.getUrl(), request.getReject());
+        log.info("ROUTE_INTENT - Endpoint=/reject will force reject=true and use NORMAL APNs for iOS");
+        // Ensure reject flag is set so the service routes to normal APNs for iOS
+        request.setReject(Boolean.TRUE);
         // Use the same sending logic as incoming
         callNotificationService.sendIncomingCallNotification(request);
         java.util.Map<String, Object> resp = new java.util.HashMap<>();
