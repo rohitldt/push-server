@@ -209,7 +209,9 @@ public class CallNotificationService {
                 Map<String, String> rejectData = new HashMap<>(data);
                 String title = "Call ended";
                 String body = "Call was rejected";
-                return apnsPushService.send(token, title, body, rejectData).thenAccept(result -> {
+                // Derive APNs topic from appId for normal iOS app (no .voip suffix)
+                String explicitTopic = p.getAppId();
+                return apnsPushService.sendWithTopic(token, explicitTopic, title, body, rejectData).thenAccept(result -> {
                     if (result.success()) {
                         log.info("✅ APNS NORMAL SUCCESS platform=iOS-NORMAL, user={}, ApnsId={}", p.getUserName(), result.messageId());
                     } else {

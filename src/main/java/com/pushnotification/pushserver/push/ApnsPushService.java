@@ -92,6 +92,69 @@ public class ApnsPushService {
         return promise;
     }
 
+    // Send a regular APNs notification with an explicit topic (useful when topic must match appId exactly)
+    public CompletableFuture<ProviderResult> sendWithTopic(String deviceToken, String explicitTopic, String title, String body, Map<String, String> data) {
+        String payload;
+        try {
+            Map<String, Object> root = new HashMap<>();
+            Map<String, Object> aps = new HashMap<>();
+            Map<String, Object> alert = new HashMap<>();
+            alert.put("title", title);
+            alert.put("body", body);
+            aps.put("alert", alert);
+            aps.put("sound", "default");
+            root.put("aps", aps);
+            if (data != null && !data.isEmpty()) {
+                root.putAll(data);
+            }
+            payload = objectMapper.writeValueAsString(root);
+            log.info("APNs JSON payload (regular+topic): {}", payload);
+            System.out.println("[APNS-REGULAR+TOPIC] JSON payload: " + payload);
+        } catch (Exception e) {
+            CompletableFuture<ProviderResult> failed = new CompletableFuture<>();
+            failed.complete(new ProviderResult(false, null, "Failed to build APNs payload: " + e.getMessage()));
+            return failed;
+        }
+        String topic = (explicitTopic != null && !explicitTopic.isBlank()) ? explicitTopic : (apnsTopic != null && !apnsTopic.isBlank() ? apnsTopic : null);
+        String rawToken = deviceToken;
+        String trimmedToken = deviceToken != null ? deviceToken.trim() : null;
+        boolean whitespaceTrimmed = rawToken != null && !rawToken.equals(trimmedToken);
+        String tokenPreview = rawToken != null && rawToken.length() > 8 ? rawToken.substring(0, 8) + "…" : rawToken;
+        log.info("APNs sending (explicit topic): token={}, topic={}, title='{}', dataKeys={}", tokenPreview, topic, title, (data != null ? data.keySet() : java.util.Set.of()));
+        if (data != null && !data.isEmpty()) {
+            log.info("APNs data payload: {}", data);
+        } else {
+            log.info("APNs data payload: {}", "{}");
+        }
+        log.info("APNs token diagnostics: rawLen={}, trimmedLen={}, whitespaceTrimmed={}, startsWithSpace={}, endsWithSpace={}",
+                rawToken == null ? 0 : rawToken.length(),
+                trimmedToken == null ? 0 : trimmedToken.length(),
+                whitespaceTrimmed,
+                rawToken != null && !rawToken.isEmpty() && Character.isWhitespace(rawToken.charAt(0)),
+                rawToken != null && !rawToken.isEmpty() && Character.isWhitespace(rawToken.charAt(rawToken.length()-1))
+        );
+        SimpleApnsPushNotification notification = new SimpleApnsPushNotification(deviceToken, topic, payload);
+
+        CompletableFuture<ProviderResult> promise = new CompletableFuture<>();
+        apnsClient.sendNotification(notification).whenComplete((response, cause) -> {
+            if (cause == null) {
+                if (response.isAccepted()) {
+                    String apnsId = response.getApnsId() != null ? response.getApnsId().toString() : null;
+                    log.info("APNs accepted: apnsId={}, token={}", apnsId, tokenPreview);
+                    promise.complete(new ProviderResult(true, apnsId, null));
+                } else {
+                    String reason = response.getRejectionReason() != null ? response.getRejectionReason().orElse(null) : null;
+                    log.warn("APNs rejected: token={}, reason={}", tokenPreview, reason);
+                    promise.complete(new ProviderResult(false, null, reason));
+                }
+            } else {
+                log.error("APNs send failed: token={}, error={}, details={}", tokenPreview, cause.getMessage(), cause.getClass().getSimpleName());
+                promise.complete(new ProviderResult(false, null, cause.getMessage()));
+            }
+        });
+        return promise;
+    }
+
     public CompletableFuture<ProviderResult> sendVoip(String deviceTokenHex, Map<String, String> data) {
         String payload;
         try {
