@@ -210,12 +210,19 @@ public class CallNotificationService {
                     String body = "Call was rejected";
                     Map<String, String> rejectData = new HashMap<>(data);
 
-                    // Normalize token: accept 64-hex directly or convert base64 (44 chars) to hex
+                    // Normalize token and validate it is a proper APNs device token (64 hex)
                     String apnsTokenHex = normalizeIosToken(rawToken);
-                    log.info("ROUTE_PUSH - platform=iOS-NORMAL(APNS), user={}, appId={}, rawTokenLen={}, apnsTokenLen={}, type={}",
-                            p.getUserName(), appId, rawToken != null ? rawToken.length() : 0, apnsTokenHex != null ? apnsTokenHex.length() : 0, data.get("type"));
-                    String explicitTopic = appId; // use bundle id as topic
-                    return apnsPushService.sendWithTopic(apnsTokenHex, explicitTopic, title, body, rejectData).thenAccept(result -> {
+                    boolean validApnsToken = apnsTokenHex != null && apnsTokenHex.matches("[a-fA-F0-9]{64}");
+                    if (!validApnsToken) {
+                        log.warn("ROUTE_SKIP - iOS-NORMAL(APNS) token invalid for user={}, appId={}, rawLen={}, normalizedLen={} (expect 64-hex); skipping APNs send",
+                                p.getUserName(), appId, rawToken != null ? rawToken.length() : 0, apnsTokenHex != null ? apnsTokenHex.length() : 0);
+                        return CompletableFuture.completedFuture(null);
+                    }
+
+                    // Use configured apns.topic (not DB appId) to avoid TopicDisallowed
+                    log.info("ROUTE_PUSH - platform=iOS-NORMAL(APNS), user={}, appId={}, tokenLen={}, type={}, topic=CONFIG_DEFAULT",
+                            p.getUserName(), appId, apnsTokenHex.length(), data.get("type"));
+                    return apnsPushService.sendWithTopic(apnsTokenHex, null, title, body, rejectData).thenAccept(result -> {
                         if (result.success()) {
                             log.info("✅ APNS NORMAL SUCCESS platform=iOS-NORMAL(APNS), user={}, ApnsId={}", p.getUserName(), result.messageId());
                         } else {
