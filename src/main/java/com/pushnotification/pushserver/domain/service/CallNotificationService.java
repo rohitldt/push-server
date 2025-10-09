@@ -69,7 +69,9 @@ public class CallNotificationService {
             data.put("roomId", request.getRoomId());
             data.put("room_id", request.getRoomId());
         }
-        data.put("type", "call");
+        // Set 'type' based on reject flag: 'reject' for rejected calls, otherwise 'call'
+        boolean isReject = Boolean.TRUE.equals(request.getReject());
+        data.put("type", isReject ? "reject" : "call");
         // Optional keys (avoid Map.of NPE on nulls)
         if (request.getCallType() != null) {
             data.put("callType", request.getCallType());
@@ -80,11 +82,11 @@ public class CallNotificationService {
         if (request.getSenderName() != null) {
             data.put("senderName", request.getSenderName());
         }
-        log.info("VoIP data map to send (pre-APNs): {}", data);
-
+        // Keep explicit reject flag for clients that rely on it
         if (request.getReject() != null) {
             data.put("reject", String.valueOf(request.getReject()));
         }
+        log.info("VoIP data map to send (pre-APNs): {}", data);
 
         if (isGroupCall) {
             data.put("isGroupCall", "true");
