@@ -184,7 +184,7 @@ public class ApnsPushService {
                     topic,
                     payload,
                     Instant.now().plusSeconds(30),
-                    DeliveryPriority.CONSERVE,
+                    DeliveryPriority.CONSERVE_POWER,
                     PushType.BACKGROUND,
                     collapseId
             );
@@ -196,7 +196,7 @@ public class ApnsPushService {
                     topic,
                     payload,
                     Instant.now().plusSeconds(30),
-                    DeliveryPriority.CONSERVE,
+                    DeliveryPriority.CONSERVE_POWER,
                     PushType.BACKGROUND
             );
         }
