@@ -204,33 +204,24 @@ public class CallNotificationService {
                 voipFutures = new ArrayList<>();
             } else {
                 voipFutures = normalIosPushers.stream().map(p -> {
-                    String token = p.getPushkey();
+                    String rawToken = p.getPushkey();
                     String appId = p.getAppId();
                     String title = "Call ended";
                     String body = "Call was rejected";
                     Map<String, String> rejectData = new HashMap<>(data);
 
-                    boolean isApnsDeviceToken = token != null && token.trim().matches("[a-fA-F0-9]{64}");
-                    if (isApnsDeviceToken) {
-                        log.info("ROUTE_PUSH - platform=iOS-NORMAL(APNS), user={}, appId={}, tokenLen={}, type={}", p.getUserName(), appId, token.length(), data.get("type"));
-                        String explicitTopic = appId; // use bundle id as topic
-                        return apnsPushService.sendWithTopic(token, explicitTopic, title, body, rejectData).thenAccept(result -> {
-                            if (result.success()) {
-                                log.info("✅ APNS NORMAL SUCCESS platform=iOS-NORMAL(APNS), user={}, ApnsId={}", p.getUserName(), result.messageId());
-                            } else {
-                                log.error("❌ APNS NORMAL FAILED platform=iOS-NORMAL(APNS), user={}, Error={}", p.getUserName(), result.error());
-                            }
-                        });
-                    } else {
-                        log.info("ROUTE_PUSH - platform=iOS-NORMAL(FCM), user={}, appId={}, tokenLen={}, type={}", p.getUserName(), appId, token != null ? token.length() : 0, data.get("type"));
-                        return fcmPushService.send(token, title, body, rejectData).thenAccept(result -> {
-                            if (result.success()) {
-                                log.info("✅ FCM SUCCESS platform=iOS-NORMAL(FCM), user={}, MessageId={}", p.getUserName(), result.messageId());
-                            } else {
-                                log.error("❌ FCM FAILED platform=iOS-NORMAL(FCM), user={}, Error={}", p.getUserName(), result.error());
-                            }
-                        });
-                    }
+                    // Normalize token: accept 64-hex directly or convert base64 (44 chars) to hex
+                    String apnsTokenHex = normalizeIosToken(rawToken);
+                    log.info("ROUTE_PUSH - platform=iOS-NORMAL(APNS), user={}, appId={}, rawTokenLen={}, apnsTokenLen={}, type={}",
+                            p.getUserName(), appId, rawToken != null ? rawToken.length() : 0, apnsTokenHex != null ? apnsTokenHex.length() : 0, data.get("type"));
+                    String explicitTopic = appId; // use bundle id as topic
+                    return apnsPushService.sendWithTopic(apnsTokenHex, explicitTopic, title, body, rejectData).thenAccept(result -> {
+                        if (result.success()) {
+                            log.info("✅ APNS NORMAL SUCCESS platform=iOS-NORMAL(APNS), user={}, ApnsId={}", p.getUserName(), result.messageId());
+                        } else {
+                            log.error("❌ APNS NORMAL FAILED platform=iOS-NORMAL(APNS), user={}, Error={}", p.getUserName(), result.error());
+                        }
+                    });
                 }).collect(Collectors.toList());
             }
         }
