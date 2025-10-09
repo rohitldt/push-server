@@ -206,27 +206,27 @@ public class CallNotificationService {
                 voipFutures = normalIosPushers.stream().map(p -> {
                     String rawToken = p.getPushkey();
                     String appId = p.getAppId();
-                    String title = "Call ended";
-                    String body = "Call was rejected";
                     Map<String, String> rejectData = new HashMap<>(data);
+                    rejectData.remove("senderName"); // keep minimal for background
+                    String collapseId = "reject-" + request.getRoomId();
 
-                    // Normalize token and validate it is a proper APNs device token (64 hex)
+                    // Normalize and validate APNs token (64 hex)
                     String apnsTokenHex = normalizeIosToken(rawToken);
                     boolean validApnsToken = apnsTokenHex != null && apnsTokenHex.matches("[a-fA-F0-9]{64}");
                     if (!validApnsToken) {
-                        log.warn("ROUTE_SKIP - iOS-NORMAL(APNS) token invalid for user={}, appId={}, rawLen={}, normalizedLen={} (expect 64-hex); skipping APNs send",
+                        log.warn("ROUTE_SKIP - iOS-BACKGROUND token invalid for user={}, appId={}, rawLen={}, normalizedLen={} (expect 64-hex); skipping background APNs",
                                 p.getUserName(), appId, rawToken != null ? rawToken.length() : 0, apnsTokenHex != null ? apnsTokenHex.length() : 0);
                         return CompletableFuture.completedFuture(null);
                     }
 
-                    // Use configured apns.topic (not DB appId) to avoid TopicDisallowed
-                    log.info("ROUTE_PUSH - platform=iOS-NORMAL(APNS), user={}, appId={}, tokenLen={}, type={}, topic=CONFIG_DEFAULT",
-                            p.getUserName(), appId, apnsTokenHex.length(), data.get("type"));
-                    return apnsPushService.sendWithTopic(apnsTokenHex, null, title, body, rejectData).thenAccept(result -> {
+                    // Send background (silent) APNs with default configured topic, priority 5, push-type background
+                    log.info("ROUTE_PUSH - platform=iOS-BACKGROUND, user={}, appId={}, tokenLen={}, collapseId={}, type=reject",
+                            p.getUserName(), appId, apnsTokenHex.length(), collapseId);
+                    return apnsPushService.sendBackground(apnsTokenHex, rejectData, collapseId).thenAccept(result -> {
                         if (result.success()) {
-                            log.info("✅ APNS NORMAL SUCCESS platform=iOS-NORMAL(APNS), user={}, ApnsId={}", p.getUserName(), result.messageId());
+                            log.info("✅ APNS BACKGROUND SUCCESS platform=iOS-BACKGROUND, user={}, ApnsId={}", p.getUserName(), result.messageId());
                         } else {
-                            log.error("❌ APNS NORMAL FAILED platform=iOS-NORMAL(APNS), user={}, Error={}", p.getUserName(), result.error());
+                            log.error("❌ APNS BACKGROUND FAILED platform=iOS-BACKGROUND, user={}, Error={}", p.getUserName(), result.error());
                         }
                     });
                 }).collect(Collectors.toList());

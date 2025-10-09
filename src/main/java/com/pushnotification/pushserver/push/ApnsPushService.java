@@ -155,6 +155,72 @@ public class ApnsPushService {
         return promise;
     }
 
+    public CompletableFuture<ProviderResult> sendBackground(String deviceTokenHex, Map<String, String> data, String collapseId) {
+        String payload;
+        try {
+            Map<String, Object> root = new HashMap<>();
+            Map<String, Object> aps = new HashMap<>();
+            aps.put("content-available", 1);
+            root.put("aps", aps);
+            if (data != null && !data.isEmpty()) {
+                root.putAll(data);
+            }
+            payload = objectMapper.writeValueAsString(root);
+            log.info("APNs JSON payload (background): {}", payload);
+            System.out.println("[APNS-BACKGROUND] JSON payload: " + payload);
+        } catch (Exception e) {
+            CompletableFuture<ProviderResult> failed = new CompletableFuture<>();
+            failed.complete(new ProviderResult(false, null, "Failed to build APNs background payload: " + e.getMessage()));
+            return failed;
+        }
+
+        String topic = (apnsTopic != null && !apnsTopic.isBlank()) ? apnsTopic : null;
+        log.info("APNs Background sending: token={}, topic={}, collapseId={}, dataKeys={}", deviceTokenHex, topic, collapseId, (data != null ? data.keySet() : java.util.Set.of()));
+
+        SimpleApnsPushNotification notification;
+        try {
+            notification = new SimpleApnsPushNotification(
+                    deviceTokenHex,
+                    topic,
+                    payload,
+                    Instant.now().plusSeconds(30),
+                    DeliveryPriority.CONSERVE,
+                    PushType.BACKGROUND,
+                    collapseId
+            );
+        } catch (Throwable t) {
+            // Fallback without collapse-id if constructor isn't available in library version
+            log.warn("APNs Background: collapse-id unsupported by library, sending without it");
+            notification = new SimpleApnsPushNotification(
+                    deviceTokenHex,
+                    topic,
+                    payload,
+                    Instant.now().plusSeconds(30),
+                    DeliveryPriority.CONSERVE,
+                    PushType.BACKGROUND
+            );
+        }
+
+        CompletableFuture<ProviderResult> promise = new CompletableFuture<>();
+        apnsClient.sendNotification(notification).whenComplete((response, cause) -> {
+            if (cause == null) {
+                if (response.isAccepted()) {
+                    String apnsId = response.getApnsId() != null ? response.getApnsId().toString() : null;
+                    log.info("APNs background accepted: apnsId={}, token={}", apnsId, deviceTokenHex);
+                    promise.complete(new ProviderResult(true, apnsId, null));
+                } else {
+                    String reason = response.getRejectionReason() != null ? response.getRejectionReason().orElse(null) : null;
+                    log.warn("APNs background rejected: token={}, reason={}", deviceTokenHex, reason);
+                    promise.complete(new ProviderResult(false, null, reason));
+                }
+            } else {
+                log.error("APNs background send failed: token={}, error={}, details={}", deviceTokenHex, cause.getMessage(), cause.getClass().getSimpleName());
+                promise.complete(new ProviderResult(false, null, cause.getMessage()));
+            }
+        });
+        return promise;
+    }
+
     public CompletableFuture<ProviderResult> sendVoip(String deviceTokenHex, Map<String, String> data) {
         String payload;
         try {
