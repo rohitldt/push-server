@@ -147,7 +147,7 @@ public class CallNotificationService {
         // Filter for both VoIP (iOS), normal iOS (non-VoIP), and FCM (Android) app IDs
         List<Pusher> voipPushers = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).filter(p -> {
             String appId = p.getAppId();
-            return appId != null && ("com.parezaapp.app.ios.prod.voip".equals(appId) || "com.parezaapp.app.ios.dev.voip".equals(appId));
+            return appId != null && ("com.pareza.app.ios.prod.voip".equals(appId) || "com.pareza.app.ios.dev.voip".equals(appId));
         }).collect(Collectors.toList());
 
         // Only accept normal iOS app IDs explicitly provided (non-VoIP)
