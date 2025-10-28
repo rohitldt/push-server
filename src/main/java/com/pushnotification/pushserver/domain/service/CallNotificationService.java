@@ -155,7 +155,7 @@ public class CallNotificationService {
                 .filter(p -> !request.getSenderId().equals(p.getUserName()))
                 .filter(p -> {
                     String appId = p.getAppId();
-                    return "com.pareza.pro.ios.prod".equals(appId) || "com.pareza.pro.ios.dev".equals(appId);
+                    return "com.pareza.app.ios.prod".equals(appId) || "com.pareza.app.ios.dev".equals(appId);
                 })
                 .collect(Collectors.toList());
 
