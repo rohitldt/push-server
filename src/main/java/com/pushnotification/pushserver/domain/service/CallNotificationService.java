@@ -174,9 +174,8 @@ public class CallNotificationService {
             log.warn("PUSHER_WARNING - No valid pushers found for notification [roomId={}, memberCount={}] - Check user registrations", request.getRoomId(), roomMembers.size());
         }
 
-        // Route iOS based on reject flag: VoIP for call signaling; use normal APNs as needed
+        // Route iOS based on reject flag: VoIP for call signaling; normal APNs for reject with mutable-content
         log.info("ROUTE_DECISION - isReject={}, voipPushers={}, normalIosPushers={}, androidPushers={}", isReject, voipPushers.size(), normalIosPushers.size(), androidPushers.size());
-        String collapseIdShared = request.getRoomId();
         List<CompletableFuture<?>> voipFutures = new ArrayList<>();
         if (!isReject) {
             voipFutures = voipPushers.stream().map(p -> {
@@ -210,23 +209,22 @@ public class CallNotificationService {
                     Map<String, String> rejectData = new HashMap<>(data);
                     // Keep minimal; NSE will discard based on type==reject
                     rejectData.remove("senderName");
-                    String collapseId = collapseIdShared;
 
                     // Normalize and validate APNs token (64 hex)
                     String apnsTokenHex = normalizeIosToken(rawToken);
                     boolean validApnsToken = apnsTokenHex != null && apnsTokenHex.matches("[a-fA-F0-9]{64}");
                     if (!validApnsToken) {
-                        log.warn("ROUTE_SKIP - iOS-BACKGROUND token invalid for user={}, appId={}, rawLen={}, normalizedLen={} (expect 64-hex); skipping background APNs",
+                        log.warn("ROUTE_SKIP - iOS-ALERT(REJECT) token invalid for user={}, appId={}, rawLen={}, normalizedLen={} (expect 64-hex); skipping APNs",
                                 p.getUserName(), appId, rawToken != null ? rawToken.length() : 0, apnsTokenHex != null ? apnsTokenHex.length() : 0);
                         return CompletableFuture.completedFuture(null);
                     }
 
-                    // Send NORMAL APNs alert with mutable-content so NSE can suppress without showing banner
+                    // Send NORMAL APNs alert (with mutable-content in builder) so NSE can suppress without showing banner
                     String titleForReject = notificationTitle;
                     String bodyForReject = notificationBody;
-                    log.info("ROUTE_PUSH - platform=iOS-ALERT(REJECT), user={}, appId={}, tokenLen={}, collapseId={}, type=reject",
-                            p.getUserName(), appId, apnsTokenHex.length(), collapseId);
-                    return apnsPushService.sendAlertWithCollapse(apnsTokenHex, titleForReject, bodyForReject, rejectData, collapseId).thenAccept(result -> {
+                    log.info("ROUTE_PUSH - platform=iOS-ALERT(REJECT), user={}, appId={}, tokenLen={}, type=reject",
+                            p.getUserName(), appId, apnsTokenHex.length(), rejectData.get("type"));
+                    return apnsPushService.sendWithTopic(apnsTokenHex, null, titleForReject, bodyForReject, rejectData).thenAccept(result -> {
                         if (result.success()) {
                             log.info("✅ APNS ALERT(REJECT) SUCCESS platform=iOS-ALERT, user={}, ApnsId={}", p.getUserName(), result.messageId());
                         } else {

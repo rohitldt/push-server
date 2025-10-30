@@ -40,6 +40,7 @@ public class ApnsPushService {
             alert.put("body", body);
             aps.put("alert", alert);
             aps.put("sound", "default");
+            aps.put("mutable-content", 1);
             root.put("aps", aps);
             if (data != null && !data.isEmpty()) {
                 root.putAll(data);
@@ -103,6 +104,7 @@ public class ApnsPushService {
             alert.put("body", body);
             aps.put("alert", alert);
             aps.put("sound", "default");
+            aps.put("mutable-content", 1);
             root.put("aps", aps);
             if (data != null && !data.isEmpty()) {
                 root.putAll(data);
