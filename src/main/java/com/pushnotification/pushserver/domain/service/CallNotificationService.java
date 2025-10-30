@@ -174,8 +174,9 @@ public class CallNotificationService {
             log.warn("PUSHER_WARNING - No valid pushers found for notification [roomId={}, memberCount={}] - Check user registrations", request.getRoomId(), roomMembers.size());
         }
 
-        // Route iOS based on reject flag: VoIP for normal calls, NORMAL APNs for reject
+        // Route iOS based on reject flag: VoIP for call signaling; use normal APNs as needed
         log.info("ROUTE_DECISION - isReject={}, voipPushers={}, normalIosPushers={}, androidPushers={}", isReject, voipPushers.size(), normalIosPushers.size(), androidPushers.size());
+        String collapseIdShared = request.getRoomId();
         List<CompletableFuture<?>> voipFutures = new ArrayList<>();
         if (!isReject) {
             voipFutures = voipPushers.stream().map(p -> {
@@ -207,8 +208,9 @@ public class CallNotificationService {
                     String rawToken = p.getPushkey();
                     String appId = p.getAppId();
                     Map<String, String> rejectData = new HashMap<>(data);
-                    rejectData.remove("senderName"); // keep minimal for background
-                    String collapseId = "reject-" + request.getRoomId();
+                    // Keep minimal; NSE will discard based on type==reject
+                    rejectData.remove("senderName");
+                    String collapseId = collapseIdShared;
 
                     // Normalize and validate APNs token (64 hex)
                     String apnsTokenHex = normalizeIosToken(rawToken);
@@ -219,14 +221,16 @@ public class CallNotificationService {
                         return CompletableFuture.completedFuture(null);
                     }
 
-                    // Send background (silent) APNs with default configured topic, priority 5, push-type background
-                    log.info("ROUTE_PUSH - platform=iOS-BACKGROUND, user={}, appId={}, tokenLen={}, collapseId={}, type=reject",
+                    // Send NORMAL APNs alert with mutable-content so NSE can suppress without showing banner
+                    String titleForReject = notificationTitle;
+                    String bodyForReject = notificationBody;
+                    log.info("ROUTE_PUSH - platform=iOS-ALERT(REJECT), user={}, appId={}, tokenLen={}, collapseId={}, type=reject",
                             p.getUserName(), appId, apnsTokenHex.length(), collapseId);
-                    return apnsPushService.sendBackground(apnsTokenHex, rejectData, collapseId).thenAccept(result -> {
+                    return apnsPushService.sendAlertWithCollapse(apnsTokenHex, titleForReject, bodyForReject, rejectData, collapseId).thenAccept(result -> {
                         if (result.success()) {
-                            log.info("✅ APNS BACKGROUND SUCCESS platform=iOS-BACKGROUND, user={}, ApnsId={}", p.getUserName(), result.messageId());
+                            log.info("✅ APNS ALERT(REJECT) SUCCESS platform=iOS-ALERT, user={}, ApnsId={}", p.getUserName(), result.messageId());
                         } else {
-                            log.error("❌ APNS BACKGROUND FAILED platform=iOS-BACKGROUND, user={}, Error={}", p.getUserName(), result.error());
+                            log.error("❌ APNS ALERT(REJECT) FAILED platform=iOS-ALERT, user={}, Error={}", p.getUserName(), result.error());
                         }
                     });
                 }).collect(Collectors.toList());
