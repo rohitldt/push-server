@@ -147,7 +147,7 @@ public class CallNotificationService {
         // Filter for both VoIP (iOS), normal iOS (non-VoIP), and FCM (Android) app IDs
         List<Pusher> voipPushers = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).filter(p -> {
             String appId = p.getAppId();
-            return appId != null && ("com.pareza.app.ios.prod.voip".equals(appId) || "com.pareza.app.ios.dev.voip".equals(appId));
+            return appId != null && ("com.beem.ldt.app.ios.prod.voip".equals(appId) || "com.beem.ldt.app.ios.dev.voip".equals(appId));
         }).collect(Collectors.toList());
 
         // Only accept normal iOS app IDs explicitly provided (non-VoIP)
@@ -155,11 +155,11 @@ public class CallNotificationService {
                 .filter(p -> !request.getSenderId().equals(p.getUserName()))
                 .filter(p -> {
                     String appId = p.getAppId();
-                    return "com.pareza.app.ios.prod".equals(appId) || "com.pareza.app.ios.dev".equals(appId);
+                    return "com.beem.ldt.app.ios.prod".equals(appId) || "com.beem.ldt.app.ios.dev".equals(appId);
                 })
                 .collect(Collectors.toList());
 
-        List<Pusher> androidPushers = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).filter(p -> "com.pareza.pro".equals(p.getAppId())|| "1:40238129953:web:90562b7f62c91e22a89460".equals(p.getAppId())).collect(Collectors.toList());
+        List<Pusher> androidPushers = pushers.stream().filter(p -> !request.getSenderId().equals(p.getUserName())).filter(p -> "com.beem.ldt.app".equals(p.getAppId()) || "1:40238129953:web:90562b7f62c91e22a89460".equals(p.getAppId())).collect(Collectors.toList());
 
         log.info("PUSHER_FILTER_IOS_VOIP - iOS VoIP pushers identified [count={}]", voipPushers.size());
         voipPushers.forEach(p -> log.debug("PUSHER_IOS_VOIP - iOS pusher details [user={}, appId={}, tokenLength={}]", p.getUserName(), p.getAppId(), p.getPushkey() != null ? p.getPushkey().length() : 0));
