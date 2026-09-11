@@ -37,6 +37,12 @@ public class CallController {
         return ResponseEntity.ok(resp);
     }
 
+    @PostMapping("/dummy-notify")
+    public ResponseEntity<Map<String, Object>> dummyNotify(@RequestBody(required = false) Map<String, Object> payload) {
+        log.info("ROUTE_INTENT - Dummy notify endpoint hit by Synapse to keep VoIP pusher alive without ringing.");
+        return ResponseEntity.ok(Map.of("rejected", java.util.Collections.emptyList()));
+    }
+
     @PostMapping("/reject")
     public ResponseEntity<Map<String, Object>> reject(@Valid @RequestBody CallNotificationRequest request) {
         log.info("Call rejected: senderId={}, roomId={}, callType={}, eventId={},url={}, reject={}" ,
